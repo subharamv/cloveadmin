@@ -291,7 +291,10 @@ export function createApiApp() {
   // Google OAuth Configuration
   const GOOGLE_OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || '';
   const GOOGLE_OAUTH_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
-  const APP_URL = process.env.APP_URL || `http://localhost:${process.env.PORT || 3000}`;
+  // process.env.URL is Netlify's automatically-injected site URL, available in
+  // both build and Functions runtime — falls back to it so OAuth redirects
+  // land on the deployed domain even if APP_URL isn't explicitly configured.
+  const APP_URL = process.env.APP_URL || process.env.URL || `http://localhost:${process.env.PORT || 3000}`;
   const GOOGLE_REDIRECT_URI = `${APP_URL}/api/auth/google/callback`;
 
   const oauth2Client = new google.auth.OAuth2(
