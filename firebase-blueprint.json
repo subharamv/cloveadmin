@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "CallLog": {
+      "title": "Call Log",
+      "description": "Records of calls made to vendors",
+      "type": "object",
+      "properties": {
+        "vendorName": { "type": "string", "description": "Name of the vendor" },
+        "contactNumber": { "type": "string", "description": "Vendor contact number" },
+        "purpose": { "type": "string", "description": "Reason for the call" },
+        "notes": { "type": "string", "description": "Any additional notes" },
+        "status": { "type": "string", "enum": ["pending", "completed", "follow-up"], "description": "Status of the call" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the call was logged" },
+        "adminId": { "type": "string", "description": "ID of the admin who made the call" }
+      },
+      "required": ["vendorName", "contactNumber", "purpose", "status", "timestamp", "adminId"]
+    },
+    "TravelBooking": {
+      "title": "Travel Booking",
+      "description": "Records of flight and hotel bookings",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["flight", "hotel"], "description": "Booking type" },
+        "details": { "type": "string", "description": "Booking details (e.g., Flight No, Hotel Name)" },
+        "vendor": { "type": "string", "description": "Booking platform (e.g., MMT, Skyscanner)" },
+        "price": { "type": "number", "description": "Cost of the booking" },
+        "date": { "type": "string", "format": "date-time", "description": "Travel/Stay date" },
+        "location": { "type": "object", "description": "Geographic location for map embedding", "properties": {
+          "lat": { "type": "number" },
+          "lng": { "type": "number" },
+          "address": { "type": "string" }
+        }},
+        "status": { "type": "string", "enum": ["confirmed", "pending", "cancelled"] },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "details", "vendor", "date", "status", "timestamp"]
+    },
+    "CabTrip": {
+      "title": "Cab Trip",
+      "description": "Records of cab bookings and parcel deliveries",
+      "type": "object",
+      "properties": {
+        "passengerName": { "type": "string" },
+        "vehicleType": { "type": "string" },
+        "serviceType": { "type": "string", "enum": ["Ride", "Delivery"] },
+        "provider": { "type": "string", "enum": ["Uber", "Ola"] },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "pickup": { "type": "string" },
+        "drop": { "type": "string" },
+        "status": { "type": "string", "enum": ["Confirmed", "Scheduled", "Pending"] },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["passengerName", "vehicleType", "serviceType", "provider", "date", "time", "pickup", "drop", "status", "timestamp"]
+    },
+    "GateEntry": {
+      "title": "Gate Entry",
+      "description": "Data collected at the security gate for assets/vendors",
+      "type": "object",
+      "properties": {
+        "vendorName": { "type": "string" },
+        "items": { "type": "string" },
+        "vehicleNumber": { "type": "string" },
+        "purpose": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["vendorName", "items", "vehicleNumber", "purpose", "timestamp"]
+    },
+    "VisitorLog": {
+      "title": "Visitor Log",
+      "description": "Records of visitor pre-registration and arrivals",
+      "type": "object",
+      "properties": {
+        "guestName": { "type": "string" },
+        "hostName": { "type": "string" },
+        "hostEmail": { "type": "string" },
+        "meetingTime": { "type": "string", "format": "date-time" },
+        "email": { "type": "string" },
+        "status": { "type": "string", "enum": ["Expected", "Checked In", "Checked Out"] },
+        "qrCode": { "type": "string" },
+        "checkInTime": { "type": "string", "format": "date-time" },
+        "checkOutTime": { "type": "string", "format": "date-time" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["guestName", "hostName", "meetingTime", "status", "qrCode", "timestamp"]
+    }
+  },
+  "firestore": {
+    "callLogs": {
+      "schema": "CallLog",
+      "description": "Collection for vendor call logs"
+    },
+    "bookings": {
+      "schema": "TravelBooking",
+      "description": "Collection for travel bookings"
+    },
+    "cabTrips": {
+      "schema": "CabTrip",
+      "description": "Collection for cab schedules and deliveries"
+    },
+    "gateEntries": {
+      "schema": "GateEntry",
+      "description": "Collection for gate arrivals and asset logs"
+    },
+    "visitor_logs": {
+      "schema": "VisitorLog",
+      "description": "Collection for visitor management"
+    }
+  }
+}

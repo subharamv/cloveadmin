@@ -1,0 +1,6 @@
+{
+  "name": "AdminPro Ops Hub",
+  "description": "A comprehensive admin tool for managing call logs, travel bookings, cab schedules, and vendor gate registrations with real-time tracking.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["Firebase", "Google Maps"]
+}

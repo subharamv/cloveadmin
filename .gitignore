@@ -1,0 +1,16 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+*.apps.googleusercontent.com.json
+client_secret*.json
+durable-pulsar-*.json
+*-aa7a3e2b1f48.json
+firebase-applet-config.json
+local_db.json
+*.traineddata
+.claude/

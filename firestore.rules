@@ -1,0 +1,126 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Entity Validations ---
+
+    function isValidCallLog(data) {
+      return data.vendorName is string && data.vendorName.size() <= 100
+          && data.contactNumber is string && data.contactNumber.size() <= 20
+          && data.purpose is string && data.purpose.size() <= 200
+          && data.notes is string && data.notes.size() <= 1000
+          && data.status in ['pending', 'completed', 'follow-up']
+          && data.timestamp == request.time
+          && data.adminId == request.auth.uid;
+    }
+
+    function isValidTravelBooking(data) {
+      return data.type in ['flight', 'hotel']
+          && data.details is string && data.details.size() <= 500
+          && data.vendor is string && data.vendor.size() <= 50
+          && data.price is number
+          && data.date is string && data.date.size() <= 50
+          && data.status in ['confirmed', 'pending', 'cancelled']
+          && data.timestamp == request.time;
+    }
+
+    function isValidCabTrip(data) {
+      return data.passengerName is string && data.passengerName.size() <= 100
+          && data.vehicleType is string && data.vehicleType.size() <= 50
+          && data.serviceType in ['Ride', 'Delivery']
+          && data.provider in ['Uber', 'Ola']
+          && data.date is string && data.date.size() <= 20
+          && data.time is string && data.time.size() <= 10
+          && data.pickup is string && data.pickup.size() <= 200
+          && data.drop is string && data.drop.size() <= 200
+          && data.status in ['Confirmed', 'Scheduled', 'Pending']
+          && data.timestamp == request.time;
+    }
+
+    function isValidGateEntry(data) {
+      return data.vendorName is string && data.vendorName.size() <= 100
+          && data.items is string && data.items.size() <= 500
+          && data.vehicleNumber is string && data.vehicleNumber.size() <= 20
+          && data.purpose is string && data.purpose.size() <= 200
+          && data.timestamp == request.time;
+    }
+
+    function isValidVisitorLog(data) {
+      return data.guestName is string && data.guestName.size() <= 100
+          && data.hostName is string && data.hostName.size() <= 100
+          && data.meetingTime is string && data.meetingTime.size() <= 100
+          && data.status in ['Expected', 'Checked In', 'Checked Out']
+          && data.qrCode is string && data.qrCode.size() <= 256
+          && data.timestamp == request.time;
+    }
+
+    // --- Collections ---
+
+    match /visitor_logs/{logId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(logId) && isValidVisitorLog(incoming());
+      allow update: if isSignedIn() && isValidVisitorLog(incoming())
+                    && (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'checkInTime', 'checkOutTime']));
+      allow delete: if isSignedIn();
+    }
+
+    match /callLogs/{logId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(logId) && isValidCallLog(incoming());
+      allow update: if isSignedIn() && isValidCallLog(incoming())
+                    && incoming().adminId == existing().adminId
+                    && (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'purpose']));
+      allow delete: if isSignedIn() && existing().adminId == request.auth.uid;
+    }
+
+    match /bookings/{bookingId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(bookingId) && isValidTravelBooking(incoming());
+      allow update: if isSignedIn() && isValidTravelBooking(incoming())
+                    && (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'details', 'price']));
+      allow delete: if isSignedIn();
+    }
+
+    match /cabTrips/{tripId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(tripId) && isValidCabTrip(incoming());
+      allow update: if isSignedIn() && isValidCabTrip(incoming())
+                    && (incoming().diff(existing()).affectedKeys().hasOnly(['status']));
+      allow delete: if isSignedIn();
+    }
+
+    match /gateEntries/{entryId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(entryId) && isValidGateEntry(incoming());
+      allow update: if isSignedIn() && isValidGateEntry(incoming())
+                    && (incoming().diff(existing()).affectedKeys().hasOnly(['items', 'purpose']));
+      allow delete: if isSignedIn();
+    }
+  }
+}
