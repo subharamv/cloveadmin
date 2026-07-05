@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Users,
   Car,
@@ -11,11 +11,14 @@ import {
   Globe,
   LogIn,
   LogOut,
-  Wallet
+  Wallet,
+  AlertTriangle,
+  CheckCircle2
 } from 'lucide-react';
 import { fetchVisitorLogs, VisitorLog } from '../security/api';
 import { fetchBills, fetchAllBillHistory, Bill, BillPayment } from '../bills/api';
-import { daysUntil, formatCurrency } from '../bills/billUtils';
+import { daysUntil, formatCurrency, getDueStatus } from '../bills/billUtils';
+import { fetchUsers, AppUser } from '../lib/auth';
 import { 
   BarChart, 
   Bar, 
@@ -25,29 +28,29 @@ import {
   Tooltip, 
   ResponsiveContainer,
   Cell,
-  Legend,
-  ReferenceLine
+  Legend
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import GlareHover from './GlareHover';
 
-const DATA = [
-  { day: 'Mon', value: 45 },
-  { day: 'Tue', value: 52 },
-  { day: 'Wed', value: 38 },
-  { day: 'Thu', value: 65 },
-  { day: 'Fri', value: 48 },
-  { day: 'Sat', value: 24 },
-  { day: 'Sun', value: 18 },
-];
+const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+// Monday-indexed day-of-week (0=Mon..6=Sun), matching WEEKDAY_LABELS order.
+function mondayIndex(date: Date): number {
+  return (date.getDay() + 6) % 7;
+}
+
+function startOfWeek(date: Date): Date {
+  const start = new Date(date);
+  start.setDate(start.getDate() - mondayIndex(start));
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
 
 const BASE_STATS = [
   { label: 'Total Occupancy', value: '1,284', trend: '+12%', icon: ShieldCheck, color: 'text-blue-500' },
-  { label: 'Active Users', value: '342', trend: '24/7', icon: Users, color: 'text-indigo-600' },
   { label: 'Active Cabs', value: '42', trend: '+5%', icon: Car, color: 'text-blue-500' },
-  { label: 'System Uptime', value: '99.9%', trend: 'Stable', icon: Zap, color: 'text-rose-500' },
-  { label: 'Response Time', value: '240ms', trend: '-18%', icon: Clock, color: 'text-amber-500' },
 ];
 
 function formatRelativeTime(iso: string): string {
@@ -104,8 +107,8 @@ function billDueLabel(days: number): string {
   return `Due in ${days}d`;
 }
 
-export default function CommandCenterDashboard({ searchTerm = '', isDarkMode = true, onNavigateToVisitors, onViewFullLogs }: { searchTerm?: string, isDarkMode?: boolean, onNavigateToVisitors?: () => void, onViewFullLogs?: () => void }) {
-  // Travelpayouts affiliate attribution script — scoped to this page (the
+export default function CommandCenterDashboard({ searchTerm = '', isDarkMode = true, onNavigateToVisitors, onViewFullLogs, onViewFullBillLogs }: { searchTerm?: string, isDarkMode?: boolean, onNavigateToVisitors?: () => void, onViewFullLogs?: () => void, onViewFullBillLogs?: () => void }) {
+  // Flight affiliate attribution script — scoped to this page (the
   // homepage/dashboard) only, loaded on mount and removed on unmount.
   useEffect(() => {
     const script = document.createElement('script');
@@ -120,6 +123,7 @@ export default function CommandCenterDashboard({ searchTerm = '', isDarkMode = t
   const [visitorLogs, setVisitorLogs] = useState<VisitorLog[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
   const [billHistory, setBillHistory] = useState<BillPayment[]>([]);
+  const [accountUsers, setAccountUsers] = useState<AppUser[]>([]);
   const [showBanner, setShowBanner] = useState(true);
 
   useEffect(() => {
@@ -138,6 +142,12 @@ export default function CommandCenterDashboard({ searchTerm = '', isDarkMode = t
       } catch {
         // Bill logs just don't show up in the feed until signed in.
       }
+      try {
+        const users = await fetchUsers();
+        setAccountUsers(users);
+      } catch {
+        // Only Master Admin/Admin can list accounts — other roles just keep this stat at 0.
+      }
     };
     load();
     const interval = setInterval(load, 20000);
@@ -151,10 +161,33 @@ export default function CommandCenterDashboard({ searchTerm = '', isDarkMode = t
   const todayVisits = todayLogs.length;
   const todayVisitors = new Set(todayLogs.map((l) => l.phone)).size;
 
+  const weeklyActivityData = useMemo(() => {
+    const weekStart = startOfWeek(new Date());
+    const counts = WEEKDAY_LABELS.map((day) => ({ day, value: 0 }));
+    visitorLogs.forEach((log) => {
+      if (!log.entryTime) return;
+      const entryDate = new Date(log.entryTime);
+      if (entryDate < weekStart) return;
+      counts[mondayIndex(entryDate)].value += 1;
+    });
+    return counts;
+  }, [visitorLogs]);
+  const todayWeekdayIndex = mondayIndex(new Date());
+
+  const activeBills = bills.filter((b) => b.status !== 'Completed');
+  const upcomingBillsCount = activeBills.filter((b) => getDueStatus(b.dueDate) === 'upcoming').length;
+  const dueBillsCount = activeBills.filter((b) => getDueStatus(b.dueDate) !== 'upcoming').length;
+  const paidBillsCount = billHistory.length;
+
+  const activeAccountsCount = accountUsers.filter((u) => u.active).length;
+
   const STATS = [
-    ...BASE_STATS.slice(0, 3),
+    ...BASE_STATS.slice(0, 1),
+    { label: 'Active Users', value: String(activeAccountsCount), trend: `${accountUsers.length} Total`, icon: Users, color: 'text-indigo-600' },
+    ...BASE_STATS.slice(1),
     { label: 'Gate Entries', value: String(todayVisits), trend: `${todayVisitors} Visitors`, icon: Activity, color: 'text-emerald-500', onClick: onNavigateToVisitors },
-    ...BASE_STATS.slice(3),
+    { label: 'Upcoming / Due Bills', value: `${upcomingBillsCount} / ${dueBillsCount}`, trend: dueBillsCount > 0 ? 'Action Needed' : 'All Clear', icon: AlertTriangle, color: 'text-amber-500', onClick: onViewFullBillLogs },
+    { label: 'Paid Bills', value: String(paidBillsCount), trend: 'All-Time', icon: CheckCircle2, color: 'text-emerald-600', onClick: onViewFullBillLogs },
   ];
 
   const liveFeed: FeedItem[] = [];
@@ -323,7 +356,7 @@ export default function CommandCenterDashboard({ searchTerm = '', isDarkMode = t
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h3 className="text-xl font-black text-[var(--text-primary)] tracking-tight">Weekly Activity</h3>
-                <p className="text-[var(--text-secondary)] text-xs font-medium mt-1 opacity-70">Movement and engagement tracking per day.</p>
+                <p className="text-[var(--text-secondary)] text-xs font-medium mt-1 opacity-70">Visitor check-ins tracked per day, this week.</p>
               </div>
               <div className="flex gap-2">
                 {['Daily', 'Weekly', 'Monthly'].map(period => (
@@ -339,7 +372,7 @@ export default function CommandCenterDashboard({ searchTerm = '', isDarkMode = t
             
             <div className="h-[250px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={DATA}>
+                <BarChart data={weeklyActivityData}>
                   <defs>
                     <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#4F46E5" />
@@ -374,7 +407,7 @@ export default function CommandCenterDashboard({ searchTerm = '', isDarkMode = t
                             </div>
                             <div className="flex items-baseline gap-2">
                               <p className={cn("text-3xl font-black tracking-tight", isDarkMode ? "text-white" : "text-slate-900")}>{payload[0].value.toLocaleString()}</p>
-                              <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Active Units</p>
+                              <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Visitors</p>
                             </div>
                           </div>
                         );
@@ -396,22 +429,8 @@ export default function CommandCenterDashboard({ searchTerm = '', isDarkMode = t
                       color: '#94A3B8'
                     }}
                   />
-                  <ReferenceLine 
-                    y={50} 
-                    stroke="#4F46E5" 
-                    strokeDasharray="8 4" 
-                    strokeWidth={2}
-                    label={{ 
-                      value: 'DAILY TARGET: 50', 
-                      position: 'insideTopRight', 
-                      fill: '#4F46E5', 
-                      fontSize: 10, 
-                      fontWeight: 900,
-                      letterSpacing: '0.1em'
-                    }} 
-                  />
-                  <Bar 
-                    name="Active Units"
+                  <Bar
+                    name="Visitors"
                     dataKey="value" 
                     radius={[12, 12, 12, 12]} 
                     barSize={40}
@@ -444,10 +463,10 @@ export default function CommandCenterDashboard({ searchTerm = '', isDarkMode = t
                       </g>
                     )}
                   >
-                    {DATA.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={index === 3 ? "url(#barGradient)" : "#E2E8F0"}
+                    {weeklyActivityData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={index === todayWeekdayIndex ? "url(#barGradient)" : "#E2E8F0"}
                         className="transition-all duration-500 hover:opacity-80 cursor-pointer"
                       />
                     ))}
@@ -543,6 +562,14 @@ export default function CommandCenterDashboard({ searchTerm = '', isDarkMode = t
               className="w-full py-5 rounded-[1.5rem] bg-[var(--bg-color)] text-[var(--text-primary)] text-[11px] font-black uppercase tracking-[0.2em] border border-[var(--border-color)] transition-all duration-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer"
             >
               View Full Visitor Logs
+            </motion.button>
+            <motion.button
+              onClick={onViewFullBillLogs}
+              whileHover={{ scale: 1.02, backgroundColor: "var(--text-primary)", color: "var(--bg-color)" }}
+              whileTap={{ scale: 0.95 }}
+              className="w-full mt-3 py-5 rounded-[1.5rem] bg-[var(--bg-color)] text-[var(--text-primary)] text-[11px] font-black uppercase tracking-[0.2em] border border-[var(--border-color)] transition-all duration-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer"
+            >
+              View Full Bill Logs
             </motion.button>
           </div>
         </motion.div>

@@ -3,8 +3,8 @@ import { getSheetsClient, getSpreadsheetId } from './googleClients';
 
 const getSheetName = () => process.env.GOOGLE_SHEETS_SHEET_NAME || 'LoginAccounts';
 
-// Columns: Email | PasswordHash | Role | CreatedAt | Name | Active
-const getRange = () => `${getSheetName()}!A:F`;
+// Columns: Email | PasswordHash | Role | CreatedAt | Name | Active | PinHash
+const getRange = () => `${getSheetName()}!A:G`;
 
 export interface SheetUser {
   rowNumber: number;
@@ -13,6 +13,7 @@ export interface SheetUser {
   role: string;
   name: string;
   active: boolean;
+  pinHash: string;
 }
 
 export async function getAllUsers(): Promise<SheetUser[]> {
@@ -27,7 +28,7 @@ export async function getAllUsers(): Promise<SheetUser[]> {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const [email, passwordHash, role, , name, active] = row;
+    const [email, passwordHash, role, , name, active, pinHash] = row;
     if (!email || (i === 0 && email.toLowerCase() === 'email')) continue;
     if (!passwordHash) continue;
     users.push({
@@ -37,6 +38,7 @@ export async function getAllUsers(): Promise<SheetUser[]> {
       role: role ? String(role) : 'Admin',
       name: name ? String(name) : '',
       active: active !== 'FALSE',
+      pinHash: pinHash ? String(pinHash) : '',
     });
   }
 
@@ -49,13 +51,20 @@ export async function findUserByEmail(email: string): Promise<SheetUser | null> 
   return users.find((u) => u.email.toLowerCase() === normalized) || null;
 }
 
-export async function verifyCredentials(email: string, password: string): Promise<SheetUser | null> {
+// Accepts either the account's password or its 4-digit PIN — whichever hash
+// the supplied credential matches against wins the login.
+export async function verifyCredentials(email: string, credential: string): Promise<SheetUser | null> {
   const user = await findUserByEmail(email);
   if (!user) return null;
   if (!user.active) return null;
 
-  const isMatch = await bcrypt.compare(password, user.passwordHash);
-  return isMatch ? user : null;
+  if (user.passwordHash && (await bcrypt.compare(credential, user.passwordHash))) {
+    return user;
+  }
+  if (user.pinHash && (await bcrypt.compare(credential, user.pinHash))) {
+    return user;
+  }
+  return null;
 }
 
 export async function appendUser(email: string, plainPassword: string, role: string, name: string): Promise<void> {
@@ -63,13 +72,13 @@ export async function appendUser(email: string, plainPassword: string, role: str
   const salt = await bcrypt.genSalt(10);
   const passwordHash = await bcrypt.hash(plainPassword, salt);
 
-  const range = `${getSheetName()}!A:F`;
+  const range = `${getSheetName()}!A:G`;
   await sheets.spreadsheets.values.append({
     spreadsheetId: getSpreadsheetId(),
     range,
     valueInputOption: 'RAW',
     requestBody: {
-      values: [[email, passwordHash, role, new Date().toISOString(), name, 'TRUE']],
+      values: [[email, passwordHash, role, new Date().toISOString(), name, 'TRUE', '']],
     },
   });
 }
@@ -105,10 +114,10 @@ export async function deleteUser(email: string): Promise<boolean> {
   const sheets = await getSheetsClient();
   await sheets.spreadsheets.values.update({
     spreadsheetId: getSpreadsheetId(),
-    range: `${getSheetName()}!A${user.rowNumber}:F${user.rowNumber}`,
+    range: `${getSheetName()}!A${user.rowNumber}:G${user.rowNumber}`,
     valueInputOption: 'RAW',
     requestBody: {
-      values: [['', '', '', '', '', '']],
+      values: [['', '', '', '', '', '', '']],
     },
   });
   return true;
@@ -128,6 +137,28 @@ export async function updatePassword(email: string, newPassword: string): Promis
     valueInputOption: 'RAW',
     requestBody: {
       values: [[passwordHash]],
+    },
+  });
+  return true;
+}
+
+export async function updatePin(email: string, newPin: string): Promise<boolean> {
+  if (!/^\d{4}$/.test(newPin)) {
+    throw new Error('PIN must be exactly 4 digits');
+  }
+  const user = await findUserByEmail(email);
+  if (!user) return false;
+
+  const sheets = await getSheetsClient();
+  const salt = await bcrypt.genSalt(10);
+  const pinHash = await bcrypt.hash(newPin, salt);
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: getSpreadsheetId(),
+    range: `${getSheetName()}!G${user.rowNumber}:G${user.rowNumber}`,
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: [[pinHash]],
     },
   });
   return true;
@@ -153,17 +184,17 @@ export async function ensureHeaderRow(): Promise<void> {
   const sheets = await getSheetsClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: getSpreadsheetId(),
-    range: `${getSheetName()}!A1:F1`,
+    range: `${getSheetName()}!A1:G1`,
   });
 
-  const expected = ['Email', 'PasswordHash', 'Role', 'CreatedAt', 'Name', 'Active'];
+  const expected = ['Email', 'PasswordHash', 'Role', 'CreatedAt', 'Name', 'Active', 'PinHash'];
   const firstRow = res.data.values?.[0] || [];
   const isComplete = expected.every((label, i) => firstRow[i] === label);
 
   if (!isComplete) {
     await sheets.spreadsheets.values.update({
       spreadsheetId: getSpreadsheetId(),
-      range: `${getSheetName()}!A1:F1`,
+      range: `${getSheetName()}!A1:G1`,
       valueInputOption: 'RAW',
       requestBody: {
         values: [expected],

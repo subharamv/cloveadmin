@@ -33,7 +33,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { signOut } from '../lib/firebase';
-import { logout as sheetsLogout, getStoredSession, fetchUsers, createUser, updateUser, deleteUser, resetPassword, setUserActive, AppUser } from '../lib/auth';
+import { logout as sheetsLogout, getStoredSession, fetchUsers, createUser, updateUser, deleteUser, resetPassword, setUserPin, setUserActive, AppUser } from '../lib/auth';
 import ProfileCard from './ProfileCard';
 
 type Tier = 'Standard' | 'Admin' | 'Master';
@@ -96,6 +96,7 @@ export function AdminPortal() {
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState<AppUser | null>(null);
   const [showResetPw, setShowResetPw] = useState<AppUser | null>(null);
+  const [showSetPin, setShowSetPin] = useState<AppUser | null>(null);
   const [showDelete, setShowDelete] = useState<AppUser | null>(null);
 
   // Form fields
@@ -106,10 +107,12 @@ export function AdminPortal() {
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState('');
   const [resetPw, setResetPw] = useState('');
+  const [setPinValue, setSetPinValue] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showCreatePw, setShowCreatePw] = useState(false);
   const [showResetPwField, setShowResetPwField] = useState(false);
+  const [showSetPinField, setShowSetPinField] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
 
   const loadUsers = async () => {
@@ -173,6 +176,22 @@ export function AdminPortal() {
       await resetPassword(showResetPw.email, resetPw);
       setShowResetPw(null);
       setResetPw('');
+    } catch (err: any) {
+      setActionError(err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSetPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showSetPin) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      await setUserPin(showSetPin.email, setPinValue);
+      setShowSetPin(null);
+      setSetPinValue('');
     } catch (err: any) {
       setActionError(err.message);
     } finally {
@@ -328,6 +347,13 @@ export function AdminPortal() {
                                 title="Reset Password"
                               >
                                 <KeyRound size={13} />
+                              </button>
+                              <button
+                                onClick={() => { setShowSetPin(u); setSetPinValue(''); }}
+                                className="p-1.5 rounded-lg hover:bg-[var(--bg-color)] text-[var(--text-secondary)] hover:text-blue-500 transition-all"
+                                title="Set PIN"
+                              >
+                                <Lock size={13} />
                               </button>
                               <button
                                 onClick={() => setShowDelete(u)}
@@ -582,6 +608,58 @@ export function AdminPortal() {
                   <button type="button" onClick={() => setShowResetPw(null)} className="px-4 py-2 text-xs font-bold text-[var(--text-secondary)] border border-[var(--border-color)] rounded-xl hover:bg-[var(--bg-color)] transition-colors">Cancel</button>
                   <button type="submit" disabled={actionLoading} className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-amber-400 text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95">
                     {actionLoading ? 'Resetting...' : <><KeyRound size={12} /> Reset</>}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Set PIN Modal */}
+      <AnimatePresence>
+        {showSetPin && (
+          <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-[var(--panel-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl p-6 max-w-md w-full"
+            >
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-sm font-extrabold text-[var(--text-primary)] flex items-center gap-2">
+                  <Lock size={16} className="text-blue-500" /> Set PIN
+                </h3>
+                <button onClick={() => setShowSetPin(null)} className="p-1 rounded-lg hover:bg-[var(--bg-color)] text-[var(--text-secondary)]">
+                  <X size={16} />
+                </button>
+              </div>
+              <form onSubmit={handleSetPin} className="space-y-4">
+                <p className="text-[10px] text-[var(--text-secondary)] opacity-70 font-mono">{showSetPin.email}</p>
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)] block mb-1">4-Digit PIN</label>
+                  <div className="relative">
+                    <input
+                      value={setPinValue}
+                      onChange={(e) => setSetPinValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      required
+                      type={showSetPinField ? 'text' : 'password'}
+                      inputMode="numeric"
+                      pattern="\d{4}"
+                      maxLength={4}
+                      className="w-full h-9 px-3 pr-9 bg-[var(--bg-color)] border border-[var(--border-color)] rounded-lg text-xs text-[var(--text-primary)] tracking-widest focus:outline-none focus:border-blue-500 transition-colors"
+                      placeholder="••••"
+                    />
+                    <button type="button" onClick={() => setShowSetPinField(!showSetPinField)} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer">
+                      {showSetPinField ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
+                {actionError && <p className="text-[10px] text-rose-500 font-bold">{actionError}</p>}
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button type="button" onClick={() => setShowSetPin(null)} className="px-4 py-2 text-xs font-bold text-[var(--text-secondary)] border border-[var(--border-color)] rounded-xl hover:bg-[var(--bg-color)] transition-colors">Cancel</button>
+                  <button type="submit" disabled={actionLoading || setPinValue.length !== 4} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-400 text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95">
+                    {actionLoading ? 'Saving...' : <><Lock size={12} /> Save PIN</>}
                   </button>
                 </div>
               </form>

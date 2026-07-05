@@ -103,7 +103,7 @@ export function VisitorAndGateHub({ searchTerm: initialSearchTerm = '' }: { sear
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toast, setToast] = useState<{ show: boolean; title: string; desc: string } | null>(null);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('analytics');
   const [sheetOnline, setSheetOnline] = useState<boolean | null>(null);
   const [showPreRegisterModal, setShowPreRegisterModal] = useState(false);
   const [expectedGuests, setExpectedGuests] = useState<SheetVisitorLog[]>([]);
@@ -486,7 +486,7 @@ export function VisitorAndGateHub({ searchTerm: initialSearchTerm = '' }: { sear
           <h2 className="text-3xl font-black text-[var(--text-primary)] flex items-center gap-2 uppercase tracking-tight">
             <Shield className="text-blue-600" /> Security Operations Center (SOC)
           </h2>
-          <p className="text-[var(--text-secondary)] opacity-70 text-sm mt-1">Live threat monitoring, perimeter control, and inward logistics registry.</p>
+          <p className="hidden md:block text-[var(--text-secondary)] opacity-70 text-sm mt-1">Live threat monitoring, perimeter control, and inward logistics registry.</p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
           <button

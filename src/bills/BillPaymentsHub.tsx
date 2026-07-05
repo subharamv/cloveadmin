@@ -16,7 +16,7 @@ const CATEGORY_TABS: { id: BillCategory; label: string; icon: any }[] = [
   { id: 'Electricity', label: 'Electricity', icon: Zap },
 ];
 
-function StatusBadge({ bill }: { bill: Bill }) {
+export function StatusBadge({ bill }: { bill: Bill }) {
   if (bill.status === 'Completed') {
     return (
       <span className="flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">

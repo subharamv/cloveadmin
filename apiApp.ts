@@ -12,6 +12,7 @@ import {
   updateUser as sheetsUpdateUser,
   deleteUser as sheetsDeleteUser,
   updatePassword,
+  updatePin,
   setUserActive,
   findUserByEmail,
 } from './googleSheetsAuth';
@@ -20,6 +21,7 @@ import { createVisitorRouter } from './visitorRoutes';
 import { ensureBillSheetsSetup } from './googleSheetsBills';
 import { createBillRouter } from './billRoutes';
 import { createTravelRouter } from './travelRoutes';
+import { google } from 'googleapis';
 
 // The API-only Express app — shared between local dev (server.ts, which adds
 // Vite middleware / static serving on top) and the Netlify Function
@@ -256,6 +258,22 @@ export function createApiApp() {
     }
   });
 
+  app.patch('/api/auth/users/:email/pin', requireRole(['Master Admin']), async (req: any, res: express.Response): Promise<any> => {
+    try {
+      const { email } = req.params;
+      const { pin } = req.body;
+      if (!pin || !/^\d{4}$/.test(pin)) {
+        return res.status(400).json({ message: 'PIN must be exactly 4 digits' });
+      }
+      const decodedEmail = decodeURIComponent(email);
+      const ok = await updatePin(decodedEmail, pin);
+      if (!ok) return res.status(404).json({ message: 'User not found' });
+      res.json({ message: 'PIN updated successfully' });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || 'Failed to update PIN' });
+    }
+  });
+
   app.patch('/api/auth/users/:email/active', requireRole(['Master Admin']), async (req: any, res: express.Response): Promise<any> => {
     try {
       const { email } = req.params;
@@ -267,6 +285,72 @@ export function createApiApp() {
       res.json({ message: `User ${active ? 'activated' : 'deactivated'} successfully` });
     } catch (err: any) {
       res.status(500).json({ message: 'Failed to update user status' });
+    }
+  });
+
+  // Google OAuth Configuration
+  const GOOGLE_OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || '';
+  const GOOGLE_OAUTH_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
+  const APP_URL = process.env.APP_URL || `http://localhost:${process.env.PORT || 3000}`;
+  const GOOGLE_REDIRECT_URI = `${APP_URL}/api/auth/google/callback`;
+
+  const oauth2Client = new google.auth.OAuth2(
+    GOOGLE_OAUTH_CLIENT_ID,
+    GOOGLE_OAUTH_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URI
+  );
+
+  // Initiate Google OAuth login
+  app.get('/api/auth/google', (_req: express.Request, res: express.Response) => {
+    const url = oauth2Client.generateAuthUrl({
+      access_type: 'online',
+      scope: ['email', 'profile'],
+    });
+    res.redirect(url);
+  });
+
+  // Google OAuth callback
+  app.get('/api/auth/google/callback', async (req: express.Request, res: express.Response) => {
+    try {
+      const { code } = req.query;
+      if (!code) {
+        return res.redirect(`${APP_URL}/?error=no_code`);
+      }
+
+      const { tokens } = await oauth2Client.getToken(code as string);
+      oauth2Client.setCredentials(tokens);
+
+      const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client as any });
+      const { data } = await oauth2.userinfo.get();
+      const email = data.email || '';
+
+      if (!email) {
+        return res.redirect(`${APP_URL}/?error=no_email`);
+      }
+
+      const user = await findUserByEmail(email);
+      if (!user) {
+        return res.redirect(`${APP_URL}/?error=unauthorized`);
+      }
+      if (!user.active) {
+        return res.redirect(`${APP_URL}/?error=inactive`);
+      }
+
+      const payload = { email, username: email, role: user.role };
+      const jwtSecret = process.env.JWT_SECRET || 'super-secret-key-change-in-production';
+      const token = jwt.sign(payload, jwtSecret, { expiresIn: '24h' });
+
+      const userParam = encodeURIComponent(JSON.stringify({
+        username: email,
+        role: user.role,
+        name: user.name || data.name || email,
+        active: true,
+      }));
+
+      res.redirect(`${APP_URL}/?token=${token}&user=${userParam}`);
+    } catch (err: any) {
+      console.error('Google OAuth callback error:', err.message);
+      res.redirect(`${APP_URL}/?error=auth_failed`);
     }
   });
 

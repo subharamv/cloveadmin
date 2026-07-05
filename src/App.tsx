@@ -5,8 +5,8 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, signIn, signOut as firebaseSignOut } from './lib/firebase';
-import { login as sheetsLogin, logout as sheetsLogout, getStoredSession, AppUser } from './lib/auth';
+import { auth, signOut as firebaseSignOut } from './lib/firebase';
+import { login as sheetsLogin, logout as sheetsLogout, getStoredSession, storeSession, AppUser } from './lib/auth';
 import { Layout } from './components/Layout';
 import { CallLogs } from './components/CallLogs';
 import { TravelAndCabsHub } from './components/TravelAndCabsHub';
@@ -14,7 +14,8 @@ import { VisitorAndGateHub } from './components/VisitorAndGateHub';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { AdminTasks } from './components/AdminTasks';
 import { FacilityManagementTab } from './tabs/FacilityManagementTab';
-import { LogIn, ShieldCheck, Database, Eye, EyeOff } from 'lucide-react';
+import { LogIn, ShieldCheck, Database, Eye, EyeOff, KeyRound, Lock } from 'lucide-react';
+import { PinInput } from './components/PinInput';
 import { motion, AnimatePresence } from 'motion/react';
 import CommandCenterDashboard from './components/CommandCenterDashboard';
 import { AdminPortal } from './components/AdminPortal';
@@ -23,6 +24,7 @@ import { BackendDataViewer } from './components/BackendDataViewer';
 import { FullVisitorLogsPage } from './components/FullVisitorLogsPage';
 import { SecurityPortal } from './security/SecurityPortal';
 import { BillPaymentsHub } from './bills/BillPaymentsHub';
+import { FullBillLogsPage } from './bills/FullBillLogsPage';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -37,9 +39,17 @@ export default function App() {
   });
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [loginAuthMode, setLoginAuthMode] = useState<'password' | 'pin'>('password');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [showLoginPw, setShowLoginPw] = useState(false);
+
+  const handleLoginModeSwitch = (mode: 'password' | 'pin') => {
+    setLoginAuthMode(mode);
+    setShowLoginPw(false);
+    setLoginError(null);
+    setLoginPassword('');
+  };
 
   const isAuthenticated = !!user || !!sheetsUser;
   const effectiveUser = user
@@ -51,6 +61,10 @@ export default function App() {
   const handleEmailLogin = async (e: FormEvent) => {
     e.preventDefault();
     if (!loginEmail || !loginPassword) return;
+    if (loginAuthMode === 'pin' && loginPassword.length !== 4) {
+      setLoginError('PIN must be 4 digits.');
+      return;
+    }
     setLoginLoading(true);
     setLoginError(null);
     try {
@@ -72,6 +86,38 @@ export default function App() {
       setSheetsUser(null);
     }
   };
+
+  const GOOGLE_OAUTH_ERROR_MESSAGES: Record<string, string> = {
+    unauthorized: 'This Google account is not registered. Ask a Master Admin to add it under Account Management first.',
+    inactive: 'This account has been deactivated. Contact your administrator.',
+    no_email: 'Could not read an email address from your Google account.',
+    auth_failed: 'Google sign-in failed. Please try again.',
+  };
+
+  // Completes the server-side Google OAuth redirect (/api/auth/google -> /api/auth/google/callback),
+  // which only issues a token when the email already exists in Account Management.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    const userParam = params.get('user');
+    const oauthError = params.get('error');
+
+    if (token && userParam) {
+      try {
+        const loggedInUser = JSON.parse(userParam) as AppUser;
+        // The callback hands back a raw JWT; every other call site expects
+        // the "Bearer " prefix already baked into the stored token string.
+        storeSession(`Bearer ${token}`, loggedInUser);
+        setSheetsUser(loggedInUser);
+      } catch {
+        setLoginError('Could not complete Google sign-in. Please try again.');
+      }
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (oauthError) {
+      setLoginError(GOOGLE_OAUTH_ERROR_MESSAGES[oauthError] || 'Google sign-in failed. Please try again.');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   // Custom secure admin path routing for the MongoDB backend logs portal
   const [isBackendRoute, setIsBackendRoute] = useState(() => {
@@ -123,7 +169,7 @@ export default function App() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard': return <CommandCenterDashboard searchTerm={searchTerm} isDarkMode={isDarkMode} onNavigateToVisitors={() => setActiveTab('securityHub')} onViewFullLogs={() => setActiveTab('fullVisitorLogs')} />;
+      case 'dashboard': return <CommandCenterDashboard searchTerm={searchTerm} isDarkMode={isDarkMode} onNavigateToVisitors={() => setActiveTab('securityHub')} onViewFullLogs={() => setActiveTab('fullVisitorLogs')} onViewFullBillLogs={() => setActiveTab('fullBillLogs')} />;
       case 'calls': return <CallLogs searchTerm={searchTerm} />;
       case 'travelHub': return <TravelAndCabsHub searchTerm={searchTerm} isDarkMode={isDarkMode} />;
       case 'tasks': return <AdminTasks searchTerm={searchTerm} />;
@@ -133,7 +179,8 @@ export default function App() {
       case 'backend_viewer': return <BackendDataViewer />;
       case 'profile': return <AdminPortal />;
       case 'fullVisitorLogs': return <FullVisitorLogsPage onBack={() => setActiveTab('dashboard')} />;
-      default: return <CommandCenterDashboard searchTerm={searchTerm} isDarkMode={isDarkMode} onNavigateToVisitors={() => setActiveTab('securityHub')} onViewFullLogs={() => setActiveTab('fullVisitorLogs')} />;
+      case 'fullBillLogs': return <FullBillLogsPage onBack={() => setActiveTab('dashboard')} />;
+      default: return <CommandCenterDashboard searchTerm={searchTerm} isDarkMode={isDarkMode} onNavigateToVisitors={() => setActiveTab('securityHub')} onViewFullLogs={() => setActiveTab('fullVisitorLogs')} onViewFullBillLogs={() => setActiveTab('fullBillLogs')} />;
     }
   };
 
@@ -222,25 +269,56 @@ export default function App() {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40 ml-1">Access Key</label>
-                      <div className="relative group">
-                        <input
-                          type={showLoginPw ? 'text' : 'password'}
-                          value={loginPassword}
-                          onChange={(e) => setLoginPassword(e.target.value)}
-                          placeholder="••••••••"
-                          autoComplete="current-password"
-                          className="w-full bg-black/40 border border-white/5 rounded-xl py-4 px-5 pr-11 text-xs font-mono text-white outline-none focus:border-blue-500/30 transition-all placeholder:text-white/20"
-                        />
+                      <div className="flex items-center justify-between ml-1">
+                        <label className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40">
+                          {loginAuthMode === 'pin' ? '4-Digit PIN' : 'Access Key'}
+                        </label>
                         <button
                           type="button"
-                          onClick={() => setShowLoginPw(!showLoginPw)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors cursor-pointer"
+                          onClick={() => handleLoginModeSwitch(loginAuthMode === 'pin' ? 'password' : 'pin')}
+                          className="flex items-center gap-1 text-[9px] font-black text-blue-500/70 hover:text-blue-400 uppercase tracking-widest transition-colors cursor-pointer"
                         >
-                          {showLoginPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                          {loginAuthMode === 'pin' ? <Lock className="w-3 h-3" /> : <KeyRound className="w-3 h-3" />}
+                          Use {loginAuthMode === 'pin' ? 'password' : 'PIN'} instead
                         </button>
-                        <div className="absolute inset-0 bg-blue-500/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none rounded-xl" />
                       </div>
+                      {loginAuthMode === 'pin' ? (
+                        <div className="flex items-center justify-center gap-2.5">
+                          <PinInput
+                            value={loginPassword}
+                            onChange={setLoginPassword}
+                            showValue={showLoginPw}
+                            autoFocus
+                            boxClassName="h-12 flex-1 max-w-12 text-center text-lg font-black bg-black/40 border border-white/5 rounded-xl text-white outline-none focus:border-blue-500/30 transition-all"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowLoginPw(!showLoginPw)}
+                            className="shrink-0 text-white/30 hover:text-white/60 transition-colors cursor-pointer"
+                          >
+                            {showLoginPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="relative group">
+                          <input
+                            type={showLoginPw ? 'text' : 'password'}
+                            value={loginPassword}
+                            onChange={(e) => setLoginPassword(e.target.value)}
+                            placeholder="••••••••"
+                            autoComplete="current-password"
+                            className="w-full bg-black/40 border border-white/5 rounded-xl py-4 px-5 pr-11 text-xs font-mono text-white outline-none focus:border-blue-500/30 transition-all placeholder:text-white/20"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowLoginPw(!showLoginPw)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors cursor-pointer"
+                          >
+                            {showLoginPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                          <div className="absolute inset-0 bg-blue-500/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none rounded-xl" />
+                        </div>
+                      )}
                     </div>
 
                     {loginError && (
@@ -270,7 +348,7 @@ export default function App() {
 
                   <div>
                     <button
-                      onClick={signIn}
+                      onClick={() => window.location.href = '/api/auth/google'}
                       className="w-full group relative overflow-hidden rounded-xl bg-white/5 border border-white/10 py-4 px-8 transition-all hover:scale-[1.02] active:scale-[0.98] hover:border-white/20"
                     >
                       <div className="relative flex items-center justify-center gap-4">

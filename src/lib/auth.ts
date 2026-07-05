@@ -32,6 +32,14 @@ export function logout() {
   localStorage.removeItem(USER_KEY);
 }
 
+// Persists a session obtained outside the normal login() call — used by the
+// server-side Google OAuth redirect flow, which already validated the email
+// against Account Management and hands back a ready-made token + user.
+export function storeSession(token: string, user: AppUser) {
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
 function isTokenExpired(token: string): boolean {
   try {
     const payload = JSON.parse(atob(token.replace(/^Bearer /, '').split('.')[1]));
@@ -108,6 +116,19 @@ export async function resetPassword(email: string, password: string): Promise<vo
     body: JSON.stringify({ password }),
   });
   if (!res.ok) throw new Error('Failed to reset password');
+}
+
+export async function setUserPin(email: string, pin: string): Promise<void> {
+  const token = getAuthToken();
+  const res = await fetch(`/api/auth/users/${encodeURIComponent(email)}/pin`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: token || '' },
+    body: JSON.stringify({ pin }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || 'Failed to update PIN');
+  }
 }
 
 export async function setUserActive(email: string, active: boolean): Promise<void> {

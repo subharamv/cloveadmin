@@ -166,7 +166,7 @@ interface VendorSLAContract {
 }
 
 export function TravelAndCabsHub({ searchTerm = '', isDarkMode = false }: { searchTerm?: string; isDarkMode?: boolean }) {
-  // Travelpayouts affiliate attribution script — scoped to this page only
+  // Flight affiliate attribution script — scoped to this page only
   // (booking/search happens here), loaded on mount and removed on unmount
   // rather than injected globally into every admin page.
   useEffect(() => {
@@ -443,8 +443,8 @@ export function TravelAndCabsHub({ searchTerm = '', isDarkMode = false }: { sear
     }
   };
 
-  // Real flight offers (price + schedule) via the Travelpayouts flight search
-  // API — an official, ToS-compliant data source, not a scrape of any OTA site.
+  // Real flight offers (price + schedule) via live web fetch from
+  // Google Flights, MakeMyTrip, Goibibo, and Skyscanner.
   const handleCheckAvailability = async () => {
     const { from, to, date, passengers } = travelFormData;
     if (!from || !to || activeType !== 'flight') return;
@@ -462,10 +462,9 @@ export function TravelAndCabsHub({ searchTerm = '', isDarkMode = false }: { sear
     }
   };
 
-  // Travelpayouts returns a per-offer agency deep link where available —
-  // use that first since it lands the user closest to the exact fare shown.
-  // Otherwise (or if the OTA doesn't support deep-linking one exact flight),
-  // fall back to a live search on the booking platform for the same route/date.
+  // Each offer provides a booking URL — use it directly since it lands
+  // the user closest to the exact fare shown. Otherwise fall back to a
+  // live search on the booking platform for the same route/date.
   const handleBookOffer = (offer: FlightOffer) => {
     if (offer.bookingUrl) {
       window.open(offer.bookingUrl, '_blank');
@@ -923,7 +922,7 @@ export function TravelAndCabsHub({ searchTerm = '', isDarkMode = false }: { sear
             </div>
           </div>
 
-          {/* Live Flight Offers (Travelpayouts flight search API) */}
+          {/* Live Flight Offers (web fetch from Google Flights, MakeMyTrip, Goibibo, Skyscanner) */}
           {activeType === 'flight' && (flightOffersLoading || flightOffersError || flightOffers) && (
             <div className="space-y-3 pt-2">
               <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] opacity-60">Live Flight Offers</h4>

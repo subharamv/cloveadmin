@@ -1,25 +1,64 @@
 import { useState, FormEvent, useEffect } from 'react';
-import { ShieldCheck, UserPlus, Users, History, LogOut, Loader2, Activity, Sun, Moon } from 'lucide-react';
+import { ShieldCheck, UserPlus, Users, History, LogOut, Loader2, Activity, Sun, Moon, Eye, EyeOff, KeyRound, Lock } from 'lucide-react';
 import { login, logout, getStoredSession, AppUser } from '../lib/auth';
 import { fetchActiveVisitors, fetchVisitorLogs } from './api';
 import { EntryForm } from './EntryForm';
 import { ActiveEntries } from './ActiveEntries';
 import { HistoryLogs } from './HistoryLogs';
 import { QuickCheckoutList } from './QuickCheckoutList';
+import { PinInput } from '../components/PinInput';
 
 type View = 'entry' | 'active' | 'history';
 
 const ALLOWED_ROLES = ['Security', 'Master Admin'];
 
+const REMEMBERED_EMAILS_KEY = 'security_login_emails';
+const DEFAULT_SECURITY_EMAIL = 'security@clovetech.com';
+
+function getRememberedEmails(): string[] {
+  try {
+    const raw = localStorage.getItem(REMEMBERED_EMAILS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberEmail(email: string) {
+  const existing = getRememberedEmails();
+  const updated = [email, ...existing.filter((e) => e !== email)].slice(0, 8);
+  try {
+    localStorage.setItem(REMEMBERED_EMAILS_KEY, JSON.stringify(updated));
+  } catch {
+    // storage unavailable — dropdown just won't persist this session
+  }
+}
+
 function SecurityLoginScreen({ onLoggedIn }: { onLoggedIn: (user: AppUser) => void }) {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => getRememberedEmails()[0] || DEFAULT_SECURITY_EMAIL);
+  const [authMode, setAuthMode] = useState<'pin' | 'password'>('pin');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const rememberedEmails = getRememberedEmails();
+
+  const handleModeSwitch = (mode: 'pin' | 'password') => {
+    setAuthMode(mode);
+    setShowPassword(false);
+    setError(null);
+    setPassword('');
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
+    if (authMode === 'pin' && password.length !== 4) {
+      setError('PIN must be 4 digits.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -29,6 +68,7 @@ function SecurityLoginScreen({ onLoggedIn }: { onLoggedIn: (user: AppUser) => vo
         setError('This account does not have security check-in access.');
         return;
       }
+      rememberEmail(email);
       onLoggedIn(user);
     } catch (err: any) {
       setError(err.message || 'Login failed.');
@@ -49,24 +89,74 @@ function SecurityLoginScreen({ onLoggedIn }: { onLoggedIn: (user: AppUser) => vo
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="security@company.com"
-            autoComplete="username"
-            required
-            className="w-full px-4 py-3.5 text-sm bg-[var(--bg-color)] border border-[var(--border-color)] rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            autoComplete="current-password"
-            required
-            className="w-full px-4 py-3.5 text-sm bg-[var(--bg-color)] border border-[var(--border-color)] rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-          />
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)] ml-1">Security Email</label>
+            <input
+              type="email"
+              list="security-email-options"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="security@company.com"
+              autoComplete="username"
+              required
+              className="w-full px-4 py-3.5 text-sm bg-[var(--bg-color)] border border-[var(--border-color)] rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+            />
+            <datalist id="security-email-options">
+              {[DEFAULT_SECURITY_EMAIL, ...rememberedEmails.filter((e) => e !== DEFAULT_SECURITY_EMAIL)].map((e) => (
+                <option key={e} value={e} />
+              ))}
+            </datalist>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between ml-1">
+              <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">
+                {authMode === 'pin' ? '4-Digit PIN' : 'Password'}
+              </label>
+              <button
+                type="button"
+                onClick={() => handleModeSwitch(authMode === 'pin' ? 'password' : 'pin')}
+                className="flex items-center gap-1 text-[10px] font-bold text-blue-500 hover:text-blue-400 transition-colors cursor-pointer"
+              >
+                {authMode === 'pin' ? <Lock className="w-3 h-3" /> : <KeyRound className="w-3 h-3" />}
+                Use {authMode === 'pin' ? 'password' : 'PIN'} instead
+              </button>
+            </div>
+            {authMode === 'pin' ? (
+              <div className="flex items-center justify-center gap-2.5">
+                <PinInput value={password} onChange={setPassword} showValue={showPassword} autoFocus />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="shrink-0 text-[var(--text-secondary)] hover:text-blue-500 transition-colors cursor-pointer"
+                  title={showPassword ? 'Hide' : 'Show'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password"
+                  autoComplete="current-password"
+                  required
+                  className="w-full px-4 py-3.5 pr-11 text-sm bg-[var(--bg-color)] border border-[var(--border-color)] rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all tracking-widest"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] hover:text-blue-500 transition-colors cursor-pointer"
+                  title={showPassword ? 'Hide' : 'Show'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            )}
+          </div>
+
           {error && <p className="text-xs text-red-600 text-center">{error}</p>}
           <button
             type="submit"
@@ -102,6 +192,16 @@ export function SecurityPortal() {
     }
     localStorage.setItem('securityDarkMode', String(isDarkMode));
   }, [isDarkMode]);
+
+  // Registers the installable-PWA service worker, scoped to /visitor only —
+  // the rest of the app is not affected.
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js', { scope: '/visitor' }).catch(() => {
+        // offline shell is a nice-to-have, not required for the portal to function
+      });
+    }
+  }, []);
 
   useEffect(() => {
     if (!user || !ALLOWED_ROLES.includes(user.role)) return;
