@@ -6,6 +6,7 @@ import fs from 'fs';
 // the importing file's top-level code), which would otherwise capture "".
 export const getSpreadsheetId = () => process.env.GOOGLE_SHEETS_SPREADSHEET_ID || '';
 export const getCredentialsPath = () => process.env.GOOGLE_APPLICATION_CREDENTIALS || '';
+export const getCredentialsJson = () => process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || '';
 export const getDriveRootFolderId = () => process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || '';
 
 const SCOPES = [
@@ -15,13 +16,23 @@ const SCOPES = [
 
 let authClientPromise: ReturnType<typeof buildAuthClient> | null = null;
 
+// Serverless hosts (Netlify Functions, etc.) have no access to an arbitrary
+// local file path, so credentials there are supplied as a raw JSON string via
+// GOOGLE_APPLICATION_CREDENTIALS_JSON instead of a file path.
 async function buildAuthClient() {
-  const credentialsPath = getCredentialsPath();
-  if (!credentialsPath || !fs.existsSync(credentialsPath)) {
-    throw new Error(`Google service account credentials file not found at "${credentialsPath}"`);
+  const credentialsJson = getCredentialsJson();
+  let key: { client_email: string; private_key: string };
+
+  if (credentialsJson) {
+    key = JSON.parse(credentialsJson);
+  } else {
+    const credentialsPath = getCredentialsPath();
+    if (!credentialsPath || !fs.existsSync(credentialsPath)) {
+      throw new Error(`Google service account credentials not found (checked GOOGLE_APPLICATION_CREDENTIALS_JSON and file path "${credentialsPath}")`);
+    }
+    key = JSON.parse(fs.readFileSync(credentialsPath, 'utf-8'));
   }
 
-  const key = JSON.parse(fs.readFileSync(credentialsPath, 'utf-8'));
   const auth = new google.auth.GoogleAuth({
     credentials: {
       client_email: key.client_email,

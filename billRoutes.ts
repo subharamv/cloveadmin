@@ -8,7 +8,13 @@ import {
   listBillHistory,
   BillCategory,
 } from './googleSheetsBills';
-import { startApepdclLookup, submitApepdclCaptcha, refreshApepdclCaptcha, cancelApepdclSession } from './apepdclBillFetch';
+
+// The APEPDCL live-lookup routes (which depend on Playwright / a headless
+// Chromium) live in billRoutesApepdcl.ts instead of here, and are only
+// imported by server.ts for local dev. Bundlers can't reliably tree-shake a
+// require() based on a runtime env var, so keeping that file out of this
+// one's import graph entirely is what actually keeps Playwright out of the
+// Netlify Function bundle — not just a feature flag.
 
 const VALID_CATEGORIES: BillCategory[] = ['Mobile', 'Vehicle', 'Electricity'];
 
@@ -135,60 +141,6 @@ export function createBillRouter(requireRole: (roles: string[]) => express.Reque
     } catch (err: any) {
       console.error('Failed to fetch bill history:', err.message);
       res.status(500).json({ message: 'Failed to fetch bill history' });
-    }
-  });
-
-  // APEPDCL live lookup: a human in the admin/security session reads the CAPTCHA
-  // image served below and types it in, exactly as they would on the APEPDCL site
-  // directly — we only automate the surrounding navigation and parsing, never the
-  // CAPTCHA verification step itself.
-  router.post('/apepdcl/start', guard, async (req: express.Request, res: express.Response): Promise<any> => {
-    try {
-      const { serviceNumber } = req.body;
-      if (!serviceNumber) return res.status(400).json({ message: 'Service number is required' });
-
-      const { sessionId, captchaImage } = await startApepdclLookup(String(serviceNumber));
-      res.json({ sessionId, captchaImage });
-    } catch (err: any) {
-      console.error('Failed to start APEPDCL lookup:', err.message);
-      res.status(502).json({ message: 'Could not reach APEPDCL right now. Please try again later.' });
-    }
-  });
-
-  router.post('/apepdcl/refresh-captcha', guard, async (req: express.Request, res: express.Response): Promise<any> => {
-    try {
-      const { sessionId } = req.body;
-      if (!sessionId) return res.status(400).json({ message: 'sessionId is required' });
-
-      const result = await refreshApepdclCaptcha(sessionId);
-      if (!result) return res.status(404).json({ message: 'Session expired, please start again' });
-      res.json(result);
-    } catch (err: any) {
-      console.error('Failed to refresh APEPDCL captcha:', err.message);
-      res.status(500).json({ message: 'Failed to refresh captcha' });
-    }
-  });
-
-  router.post('/apepdcl/verify', guard, async (req: express.Request, res: express.Response): Promise<any> => {
-    try {
-      const { sessionId, captchaText } = req.body;
-      if (!sessionId || !captchaText) return res.status(400).json({ message: 'sessionId and captchaText are required' });
-
-      const result = await submitApepdclCaptcha(sessionId, String(captchaText));
-      res.json(result);
-    } catch (err: any) {
-      console.error('Failed to verify APEPDCL captcha:', err.message);
-      res.status(500).json({ message: 'Failed to verify captcha' });
-    }
-  });
-
-  router.post('/apepdcl/cancel', guard, async (req: express.Request, res: express.Response): Promise<any> => {
-    try {
-      const { sessionId } = req.body;
-      if (sessionId) await cancelApepdclSession(sessionId);
-      res.json({ message: 'Session cancelled' });
-    } catch (err: any) {
-      res.status(500).json({ message: 'Failed to cancel session' });
     }
   });
 
