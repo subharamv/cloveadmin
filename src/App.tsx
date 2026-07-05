@@ -14,7 +14,7 @@ import { VisitorAndGateHub } from './components/VisitorAndGateHub';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { AdminTasks } from './components/AdminTasks';
 import { FacilityManagementTab } from './tabs/FacilityManagementTab';
-import { LogIn, ShieldCheck, Database } from 'lucide-react';
+import { LogIn, ShieldCheck, Database, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import CommandCenterDashboard from './components/CommandCenterDashboard';
 import { AdminPortal } from './components/AdminPortal';
@@ -39,6 +39,7 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [showLoginPw, setShowLoginPw] = useState(false);
 
   const isAuthenticated = !!user || !!sheetsUser;
   const effectiveUser = user
@@ -224,13 +225,20 @@ export default function App() {
                       <label className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40 ml-1">Access Key</label>
                       <div className="relative group">
                         <input
-                          type="password"
+                          type={showLoginPw ? 'text' : 'password'}
                           value={loginPassword}
                           onChange={(e) => setLoginPassword(e.target.value)}
                           placeholder="••••••••"
                           autoComplete="current-password"
-                          className="w-full bg-black/40 border border-white/5 rounded-xl py-4 px-5 text-xs font-mono text-white outline-none focus:border-blue-500/30 transition-all placeholder:text-white/20"
+                          className="w-full bg-black/40 border border-white/5 rounded-xl py-4 px-5 pr-11 text-xs font-mono text-white outline-none focus:border-blue-500/30 transition-all placeholder:text-white/20"
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowLoginPw(!showLoginPw)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors cursor-pointer"
+                        >
+                          {showLoginPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
                         <div className="absolute inset-0 bg-blue-500/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none rounded-xl" />
                       </div>
                     </div>
@@ -315,17 +323,6 @@ export default function App() {
           transition={{ duration: 1 }}
           className="h-full w-full relative"
         >
-          {/* Theme Transition Flash Overlay */}
-          <AnimatePresence mode="popLayout">
-            <motion.div
-              key={isDarkMode ? 'dark-flash' : 'light-flash'}
-              initial={{ opacity: 0.5 }}
-              animate={{ opacity: 0 }}
-              transition={{ duration: 1, ease: "easeOut" }}
-              className="fixed inset-0 z-[100] pointer-events-none bg-blue-500/5 mix-blend-overlay"
-            />
-          </AnimatePresence>
-
           <Layout
             activeTab={activeTab}
             setActiveTab={setActiveTab}

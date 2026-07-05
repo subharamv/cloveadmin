@@ -27,6 +27,8 @@ import {
   PowerOff,
   X,
   Save,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -106,6 +108,8 @@ export function AdminPortal() {
   const [resetPw, setResetPw] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showCreatePw, setShowCreatePw] = useState(false);
+  const [showResetPwField, setShowResetPwField] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
 
   const loadUsers = async () => {
@@ -471,7 +475,12 @@ export function AdminPortal() {
                 </div>
                 <div>
                   <label className="text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)] block mb-1">Password</label>
-                  <input value={createPassword} onChange={(e) => setCreatePassword(e.target.value)} required type="password" className="w-full h-9 px-3 bg-[var(--bg-color)] border border-[var(--border-color)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none focus:border-blue-500 transition-colors" placeholder="••••••••" />
+                  <div className="relative">
+                    <input value={createPassword} onChange={(e) => setCreatePassword(e.target.value)} required type={showCreatePw ? 'text' : 'password'} className="w-full h-9 px-3 pr-9 bg-[var(--bg-color)] border border-[var(--border-color)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none focus:border-blue-500 transition-colors" placeholder="••••••••" />
+                    <button type="button" onClick={() => setShowCreatePw(!showCreatePw)} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer">
+                      {showCreatePw ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)] block mb-1">Role</label>
@@ -561,7 +570,12 @@ export function AdminPortal() {
                 <p className="text-[10px] text-[var(--text-secondary)] opacity-70 font-mono">{showResetPw.email}</p>
                 <div>
                   <label className="text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)] block mb-1">New Password</label>
-                  <input value={resetPw} onChange={(e) => setResetPw(e.target.value)} required type="password" className="w-full h-9 px-3 bg-[var(--bg-color)] border border-[var(--border-color)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none focus:border-blue-500 transition-colors" placeholder="••••••••" />
+                  <div className="relative">
+                    <input value={resetPw} onChange={(e) => setResetPw(e.target.value)} required type={showResetPwField ? 'text' : 'password'} className="w-full h-9 px-3 pr-9 bg-[var(--bg-color)] border border-[var(--border-color)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none focus:border-blue-500 transition-colors" placeholder="••••••••" />
+                    <button type="button" onClick={() => setShowResetPwField(!showResetPwField)} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer">
+                      {showResetPwField ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
                 </div>
                 {actionError && <p className="text-[10px] text-rose-500 font-bold">{actionError}</p>}
                 <div className="flex items-center justify-end gap-3 pt-2">

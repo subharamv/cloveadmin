@@ -1,5 +1,5 @@
 import { useState, FormEvent, useEffect } from 'react';
-import { ShieldCheck, UserPlus, Users, History, LogOut, Loader2, Sun, Moon, Activity } from 'lucide-react';
+import { ShieldCheck, UserPlus, Users, History, LogOut, Loader2, Activity, Sun, Moon } from 'lucide-react';
 import { login, logout, getStoredSession, AppUser } from '../lib/auth';
 import { fetchActiveVisitors, fetchVisitorLogs } from './api';
 import { EntryForm } from './EntryForm';
