@@ -105,6 +105,18 @@ function billDueLabel(days: number): string {
 }
 
 export default function CommandCenterDashboard({ searchTerm = '', isDarkMode = true, onNavigateToVisitors, onViewFullLogs }: { searchTerm?: string, isDarkMode?: boolean, onNavigateToVisitors?: () => void, onViewFullLogs?: () => void }) {
+  // Travelpayouts affiliate attribution script — scoped to this page (the
+  // homepage/dashboard) only, loaded on mount and removed on unmount.
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = 'https://tp-em.com/NTQ2NTk0.js?t=546594';
+    document.head.appendChild(script);
+    return () => {
+      document.head.removeChild(script);
+    };
+  }, []);
+
   const [visitorLogs, setVisitorLogs] = useState<VisitorLog[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
   const [billHistory, setBillHistory] = useState<BillPayment[]>([]);
