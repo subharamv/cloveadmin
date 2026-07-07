@@ -101,6 +101,16 @@ export async function uploadFile(
   };
 }
 
+export function extractFileIdFromDriveLink(driveLink: string): string | null {
+  const match = driveLink.match(/\/file\/d\/([^/]+)/) || driveLink.match(/[?&]id=([^&]+)/);
+  return match ? match[1] : null;
+}
+
+export async function deleteFile(fileId: string): Promise<void> {
+  const drive = await getDriveClient();
+  await drive.files.delete({ fileId, supportsAllDrives: true });
+}
+
 export interface DownloadedFile {
   mimeType: string;
   buffer: Buffer;

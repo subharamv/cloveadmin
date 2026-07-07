@@ -27,6 +27,7 @@ export interface VisitorRecord {
   createdAt: string;
   updatedAt: string;
   lastPhotoDriveLink: string;
+  occupation: string;
 }
 
 export interface VisitorLog {
@@ -45,6 +46,8 @@ export interface VisitorLog {
   loggedBy: string;
   host: string;
   expectedTime: string;
+  occupation: string;
+  numberOfPersons: number;
 }
 
 export function searchVisitors(query: string): Promise<VisitorMatch[]> {
@@ -53,6 +56,14 @@ export function searchVisitors(query: string): Promise<VisitorMatch[]> {
 
 export function lookupVisitor(phone: string): Promise<{ found: boolean; visitor: VisitorRecord | null }> {
   return authedFetch(`/api/visitors/lookup/${encodeURIComponent(phone)}`);
+}
+
+export function updateVisitorProfile(data: { phone: string; name: string; occupation?: string; documentType?: string }): Promise<{ message: string; visitor: VisitorRecord }> {
+  return authedFetch('/api/visitors/profile', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
 }
 
 export function submitVisitorEntry(formData: FormData): Promise<{ message: string; log: VisitorLog }> {
@@ -94,6 +105,10 @@ export function createPreRegistration(data: {
   });
 }
 
+export function generatePreRegisterLink(): Promise<{ link: string; expiresAt: string }> {
+  return authedFetch('/api/visitors/preregister-link', { method: 'POST' });
+}
+
 export function deleteVisitorLog(logId: string): Promise<{ message: string; count: number }> {
   return authedFetch('/api/visitors/delete', {
     method: 'DELETE',
@@ -112,6 +127,20 @@ export function bulkDeleteVisitorLogs(logIds: string[]): Promise<{ message: stri
 
 export function fetchExpectedVisitors(): Promise<VisitorLog[]> {
   return authedFetch('/api/visitors/expected');
+}
+
+export function updatePreRegistration(logId: string, data: {
+  name?: string;
+  phone?: string;
+  purpose?: string;
+  host?: string;
+  expectedTime?: string;
+}): Promise<{ message: string; log: VisitorLog }> {
+  return authedFetch(`/api/visitors/preregister/${encodeURIComponent(logId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
 }
 
 export function checkInVisitor(logId: string, photoFile: File): Promise<{ message: string; log: VisitorLog }> {

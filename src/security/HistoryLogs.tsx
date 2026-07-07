@@ -135,7 +135,10 @@ export function HistoryLogs() {
                           {log.status}
                         </span>
                       </div>
-                      <p className="text-[11px] sm:text-xs text-[var(--text-secondary)] mt-1">{log.phone} · {log.purpose} · ID {log.visitorIdCardNumber}</p>
+                      <p className="text-[11px] sm:text-xs text-[var(--text-secondary)] mt-1">
+                        {log.phone} · {log.purpose}{log.occupation && ` · ${log.occupation}`} · ID {log.visitorIdCardNumber}
+                        {log.numberOfPersons > 1 && ` · ${log.numberOfPersons} pax`}
+                      </p>
                       <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mt-1.5 text-[10px] sm:text-[11px] text-[var(--text-secondary)] font-mono">
                         <span className="flex items-center gap-1"><Clock className="w-3 h-3" /><span className="font-bold text-[var(--text-primary)]">In:</span> {formatDateTime(log.entryTime)}</span>
                         {log.exitTime && <span className="flex items-center gap-1"><Clock className="w-3 h-3" /><span className="font-bold text-[var(--text-primary)]">Out:</span> {formatDateTime(log.exitTime)}</span>}

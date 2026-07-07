@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Clock, Phone, UserCheck, Loader2, CalendarClock, Building2 } from 'lucide-react';
 import { fetchExpectedVisitors, checkInVisitor, VisitorLog } from './api';
 import { CameraCapture } from './CameraCapture';
+import { DriveImage } from './DriveImage';
+import { MediaViewerModal } from './MediaViewerModal';
 
 interface ExpectedVisitorsProps {
   onCheckedIn?: () => void;
@@ -14,6 +16,7 @@ export function ExpectedVisitors({ onCheckedIn }: ExpectedVisitorsProps) {
   const [error, setError] = useState<string | null>(null);
   const [capturingFor, setCapturingFor] = useState<VisitorLog | null>(null);
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
+  const [viewer, setViewer] = useState<{ driveLink: string; title: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -67,9 +70,20 @@ export function ExpectedVisitors({ onCheckedIn }: ExpectedVisitorsProps) {
               exit={{ opacity: 0, x: -20 }}
               className="bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-2xl p-4 flex items-center gap-4"
             >
-              <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 text-amber-600">
-                <CalendarClock className="w-5 h-5" />
-              </div>
+              <button
+                type="button"
+                onClick={() => guest.photoDriveLink && setViewer({ driveLink: guest.photoDriveLink, title: `${guest.name || guest.phone} — Photo` })}
+                disabled={!guest.photoDriveLink}
+                className="w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-amber-500/20 bg-amber-500/10"
+              >
+                {guest.photoDriveLink ? (
+                  <DriveImage driveLink={guest.photoDriveLink} alt={guest.name || guest.phone} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-amber-600">
+                    <CalendarClock className="w-5 h-5" />
+                  </div>
+                )}
+              </button>
 
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-[var(--text-primary)] truncate">{guest.name || guest.phone}</h3>
@@ -97,6 +111,10 @@ export function ExpectedVisitors({ onCheckedIn }: ExpectedVisitorsProps) {
 
       {capturingFor && (
         <CameraCapture onCapture={handleCapture} onClose={() => setCapturingFor(null)} />
+      )}
+
+      {viewer && (
+        <MediaViewerModal driveLink={viewer.driveLink} title={viewer.title} onClose={() => setViewer(null)} />
       )}
     </div>
   );

@@ -3,15 +3,15 @@ import { getSheetsClient, getSpreadsheetId } from './googleClients';
 const getVisitorsSheetName = () => process.env.GOOGLE_SHEETS_VISITORS_SHEET_NAME || 'Visitors';
 const getLogsSheetName = () => process.env.GOOGLE_SHEETS_VISITOR_LOGS_SHEET_NAME || 'VisitorLogs';
 
-// Visitors: Phone | Name | DocumentType | DocumentDriveLink | FolderDriveLink | CreatedAt | UpdatedAt | LastPhotoDriveLink
-const VISITORS_HEADERS = ['Phone', 'Name', 'DocumentType', 'DocumentDriveLink', 'FolderDriveLink', 'CreatedAt', 'UpdatedAt', 'LastPhotoDriveLink'];
-const VISITORS_RANGE_ALL = () => `${getVisitorsSheetName()}!A:H`;
-const VISITORS_RANGE_HEADER = () => `${getVisitorsSheetName()}!A1:H1`;
+// Visitors: Phone | Name | DocumentType | DocumentDriveLink | FolderDriveLink | CreatedAt | UpdatedAt | LastPhotoDriveLink | Occupation
+const VISITORS_HEADERS = ['Phone', 'Name', 'DocumentType', 'DocumentDriveLink', 'FolderDriveLink', 'CreatedAt', 'UpdatedAt', 'LastPhotoDriveLink', 'Occupation'];
+const VISITORS_RANGE_ALL = () => `${getVisitorsSheetName()}!A:I`;
+const VISITORS_RANGE_HEADER = () => `${getVisitorsSheetName()}!A1:I1`;
 
-// VisitorLogs: LogId | Phone | Name | EntryType | Purpose | DocumentType | DocumentDriveLink | PhotoDriveLink | VisitorIdCardNumber | EntryTime | ExitTime | Status | LoggedBy | Host | ExpectedTime
-const LOGS_HEADERS = ['LogId', 'Phone', 'Name', 'EntryType', 'Purpose', 'DocumentType', 'DocumentDriveLink', 'PhotoDriveLink', 'VisitorIdCardNumber', 'EntryTime', 'ExitTime', 'Status', 'LoggedBy', 'Host', 'ExpectedTime'];
-const LOGS_RANGE_ALL = () => `${getLogsSheetName()}!A:O`;
-const LOGS_RANGE_HEADER = () => `${getLogsSheetName()}!A1:O1`;
+// VisitorLogs: LogId | Phone | Name | EntryType | Purpose | DocumentType | DocumentDriveLink | PhotoDriveLink | VisitorIdCardNumber | EntryTime | ExitTime | Status | LoggedBy | Host | ExpectedTime | Occupation | NumberOfPersons
+const LOGS_HEADERS = ['LogId', 'Phone', 'Name', 'EntryType', 'Purpose', 'DocumentType', 'DocumentDriveLink', 'PhotoDriveLink', 'VisitorIdCardNumber', 'EntryTime', 'ExitTime', 'Status', 'LoggedBy', 'Host', 'ExpectedTime', 'Occupation', 'NumberOfPersons'];
+const LOGS_RANGE_ALL = () => `${getLogsSheetName()}!A:Q`;
+const LOGS_RANGE_HEADER = () => `${getLogsSheetName()}!A1:Q1`;
 
 export interface Visitor {
   rowNumber: number;
@@ -23,6 +23,7 @@ export interface Visitor {
   createdAt: string;
   updatedAt: string;
   lastPhotoDriveLink: string;
+  occupation: string;
 }
 
 export interface VisitorLog {
@@ -42,6 +43,8 @@ export interface VisitorLog {
   loggedBy: string;
   host: string;
   expectedTime: string;
+  occupation: string;
+  numberOfPersons: number;
 }
 
 async function sheetExists(title: string): Promise<boolean> {
@@ -104,7 +107,7 @@ async function getAllVisitors(): Promise<Visitor[]> {
   const rows = res.data.values || [];
   const visitors: Visitor[] = [];
   for (let i = 0; i < rows.length; i++) {
-    const [phone, name, documentType, documentDriveLink, folderDriveLink, createdAt, updatedAt, lastPhotoDriveLink] = rows[i];
+    const [phone, name, documentType, documentDriveLink, folderDriveLink, createdAt, updatedAt, lastPhotoDriveLink, occupation] = rows[i];
     if (!phone || (i === 0 && phone === 'Phone')) continue;
     visitors.push({
       rowNumber: i + 1,
@@ -116,6 +119,7 @@ async function getAllVisitors(): Promise<Visitor[]> {
       createdAt: createdAt || '',
       updatedAt: updatedAt || '',
       lastPhotoDriveLink: lastPhotoDriveLink || '',
+      occupation: occupation || '',
     });
   }
   return visitors;
@@ -142,6 +146,7 @@ export async function upsertVisitor(data: {
   documentDriveLink?: string;
   folderDriveLink?: string;
   lastPhotoDriveLink?: string;
+  occupation?: string;
 }): Promise<void> {
   const sheets = await getSheetsClient();
   const existing = await findVisitorByPhone(data.phone);
@@ -157,10 +162,11 @@ export async function upsertVisitor(data: {
       existing.createdAt,
       now,
       data.lastPhotoDriveLink || existing.lastPhotoDriveLink,
+      data.occupation ?? existing.occupation,
     ]];
     await sheets.spreadsheets.values.update({
       spreadsheetId: getSpreadsheetId(),
-      range: `${getVisitorsSheetName()}!A${existing.rowNumber}:H${existing.rowNumber}`,
+      range: `${getVisitorsSheetName()}!A${existing.rowNumber}:I${existing.rowNumber}`,
       valueInputOption: 'RAW',
       requestBody: { values },
     });
@@ -179,6 +185,7 @@ export async function upsertVisitor(data: {
           now,
           now,
           data.lastPhotoDriveLink || '',
+          data.occupation || '',
         ]],
       },
     });
@@ -186,7 +193,7 @@ export async function upsertVisitor(data: {
 }
 
 function rowToLog(row: any[], rowNumber: number): VisitorLog {
-  const [logId, phone, name, entryType, purpose, documentType, documentDriveLink, photoDriveLink, visitorIdCardNumber, entryTime, exitTime, status, loggedBy, host, expectedTime] = row;
+  const [logId, phone, name, entryType, purpose, documentType, documentDriveLink, photoDriveLink, visitorIdCardNumber, entryTime, exitTime, status, loggedBy, host, expectedTime, occupation, numberOfPersons] = row;
   return {
     rowNumber,
     logId: logId || '',
@@ -204,6 +211,8 @@ function rowToLog(row: any[], rowNumber: number): VisitorLog {
     loggedBy: loggedBy || '',
     host: host || '',
     expectedTime: expectedTime || '',
+    occupation: occupation || '',
+    numberOfPersons: Number(numberOfPersons) || 1,
   };
 }
 
@@ -233,6 +242,8 @@ export async function appendLog(entry: {
   photoDriveLink: string;
   visitorIdCardNumber: string;
   loggedBy: string;
+  occupation?: string;
+  numberOfPersons?: number;
 }): Promise<VisitorLog> {
   const sheets = await getSheetsClient();
   const logId = `LOG-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
@@ -254,6 +265,8 @@ export async function appendLog(entry: {
     entry.loggedBy,
     '',
     '',
+    entry.occupation || '',
+    entry.numberOfPersons || 1,
   ];
 
   await sheets.spreadsheets.values.append({
@@ -312,6 +325,12 @@ export async function createPreRegistration(data: {
   host: string;
   expectedTime: string;
   loggedBy: string;
+  occupation?: string;
+  documentType?: string;
+  documentDriveLink?: string;
+  photoDriveLink?: string;
+  visitorIdCardNumber?: string;
+  numberOfPersons?: number;
 }): Promise<VisitorLog> {
   const sheets = await getSheetsClient();
   const existing = data.phone ? await findVisitorByPhone(data.phone) : null;
@@ -323,16 +342,18 @@ export async function createPreRegistration(data: {
     data.name || existing?.name || '',
     existing ? 'Old' : 'New',
     data.purpose,
-    existing?.documentType || '',
-    existing?.documentDriveLink || '',
-    '',
-    '',
+    data.documentType || existing?.documentType || '',
+    data.documentDriveLink || existing?.documentDriveLink || '',
+    data.photoDriveLink || existing?.lastPhotoDriveLink || '',
+    data.visitorIdCardNumber || '',
     '',
     '',
     'Expected',
     data.loggedBy,
     data.host,
     data.expectedTime,
+    data.occupation || existing?.occupation || '',
+    data.numberOfPersons || 1,
   ];
 
   await sheets.spreadsheets.values.append({
@@ -343,6 +364,60 @@ export async function createPreRegistration(data: {
   });
 
   return rowToLog(row, -1);
+}
+
+// Admin correction of a pre-registered guest's details before arrival —
+// only meaningful while the entry is still 'Expected'; once checked in the
+// visit record should stand as logged.
+export async function updatePreRegistration(logId: string, updates: {
+  name?: string;
+  phone?: string;
+  purpose?: string;
+  host?: string;
+  expectedTime?: string;
+}): Promise<VisitorLog | null> {
+  const sheets = await getSheetsClient();
+  const logs = await getAllLogs();
+  const log = logs.find((l) => l.logId === logId);
+  if (!log || log.status !== 'Expected') return null;
+
+  const updated: VisitorLog = {
+    ...log,
+    name: updates.name !== undefined ? updates.name : log.name,
+    phone: updates.phone !== undefined ? updates.phone : log.phone,
+    purpose: updates.purpose !== undefined ? updates.purpose : log.purpose,
+    host: updates.host !== undefined ? updates.host : log.host,
+    expectedTime: updates.expectedTime !== undefined ? updates.expectedTime : log.expectedTime,
+  };
+
+  const row = [
+    updated.logId,
+    updated.phone,
+    updated.name,
+    updated.entryType,
+    updated.purpose,
+    updated.documentType,
+    updated.documentDriveLink,
+    updated.photoDriveLink,
+    updated.visitorIdCardNumber,
+    updated.entryTime,
+    updated.exitTime,
+    updated.status,
+    updated.loggedBy,
+    updated.host,
+    updated.expectedTime,
+    updated.occupation,
+    updated.numberOfPersons,
+  ];
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: getSpreadsheetId(),
+    range: `${getLogsSheetName()}!A${log.rowNumber}:Q${log.rowNumber}`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [row] },
+  });
+
+  return updated;
 }
 
 export async function listExpectedLogs(): Promise<VisitorLog[]> {

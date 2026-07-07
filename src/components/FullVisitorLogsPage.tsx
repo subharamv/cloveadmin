@@ -126,7 +126,8 @@ function LogRow({ log, onExit }: { log: VisitorLog; onExit: (logId: string) => v
           </span>
         </div>
         <p className="text-[11px] text-[var(--text-secondary)] opacity-70 mt-0.5 truncate">
-          {log.phone} · {log.purpose} · ID {log.visitorIdCardNumber}
+          {log.phone} · {log.purpose}{log.occupation && ` · ${log.occupation}`} · ID {log.visitorIdCardNumber}
+          {log.numberOfPersons > 1 && ` · ${log.numberOfPersons} pax`}
         </p>
         <div className="flex items-center gap-3 mt-1 text-[10px] font-mono text-[var(--text-secondary)] opacity-60 flex-wrap">
           <span className="flex items-center gap-1"><Clock size={10} /><span className="font-bold text-[var(--text-primary)] opacity-100">In:</span> {formatDateTime(log.entryTime)}</span>

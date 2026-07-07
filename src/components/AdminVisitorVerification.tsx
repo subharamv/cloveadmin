@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShieldCheck, Users, History, FileText, Clock, LogOut, RefreshCw, KeyRound, Search, CalendarDays, Activity, UserCheck, Timer, Trash2, CheckSquare, Phone } from 'lucide-react';
+import { ShieldCheck, Users, History, FileText, Clock, LogOut, RefreshCw, KeyRound, Search, CalendarDays, Activity, UserCheck, Timer, Trash2, CheckSquare, Phone, Pencil } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getAuthToken } from '../lib/auth';
 import { fetchActiveVisitors, fetchVisitorLogs, markVisitorExit, deleteVisitorLog, bulkDeleteVisitorLogs, VisitorLog } from '../security/api';
 import { DriveImage } from '../security/DriveImage';
 import { MediaViewerModal } from '../security/MediaViewerModal';
+import { EditVisitorModal } from '../security/EditVisitorModal';
 import { elapsedSince, durationBetween } from '../security/timeUtils';
 
 function formatDateTime(iso: string): string {
@@ -17,8 +18,9 @@ function formatDateTime(iso: string): string {
   }
 }
 
-function VisitorRow({ log, onExit, selected, onToggle }: { log: VisitorLog; onExit?: (logId: string) => void; selected?: boolean; onToggle?: () => void }) {
+function VisitorRow({ log, onExit, selected, onToggle, onProfileUpdated }: { log: VisitorLog; onExit?: (logId: string) => void; selected?: boolean; onToggle?: () => void; onProfileUpdated?: () => void }) {
   const [viewer, setViewer] = useState<{ driveLink: string; title: string } | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -66,7 +68,8 @@ function VisitorRow({ log, onExit, selected, onToggle }: { log: VisitorLog; onEx
           </span>
         </div>
         <p className="text-[11px] text-[var(--text-secondary)] opacity-70 mt-0.5 truncate">
-          {log.phone} · {log.purpose} · ID {log.visitorIdCardNumber}
+          {log.phone} · {log.purpose}{log.occupation && ` · ${log.occupation}`} · ID {log.visitorIdCardNumber}
+          {log.numberOfPersons > 1 && ` · ${log.numberOfPersons} pax`}
         </p>
         <div className="flex items-center gap-3 mt-1 text-[10px] font-mono text-[var(--text-secondary)] opacity-60 flex-wrap">
           <span className="flex items-center gap-1"><Clock size={10} /><span className="font-bold text-[var(--text-primary)] opacity-100">In:</span> {formatDateTime(log.entryTime)}</span>
@@ -96,6 +99,14 @@ function VisitorRow({ log, onExit, selected, onToggle }: { log: VisitorLog; onEx
           </button>
         )}
         <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setShowEditModal(true); }}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-[var(--bg-color)] border border-[var(--border-color)] hover:border-blue-500/30 text-[var(--text-secondary)] hover:text-blue-600 text-[9px] font-black uppercase rounded-lg transition-all active:scale-95"
+            title="Edit visitor details"
+          >
+            <Pencil size={11} /> Edit
+          </button>
           {log.phone && (
             <a
               href={`tel:${log.phone}`}
@@ -119,6 +130,16 @@ function VisitorRow({ log, onExit, selected, onToggle }: { log: VisitorLog; onEx
 
       {viewer && (
         <MediaViewerModal driveLink={viewer.driveLink} title={viewer.title} onClose={() => setViewer(null)} />
+      )}
+
+      {showEditModal && (
+        <EditVisitorModal
+          phone={log.phone}
+          name={log.name}
+          occupation={log.occupation}
+          onClose={() => setShowEditModal(false)}
+          onSaved={() => onProfileUpdated?.()}
+        />
       )}
     </div>
   );
@@ -570,7 +591,7 @@ export function AdminVisitorVerification() {
         <AnimatePresence mode="popLayout">
           {paginated.map((log) => (
             <motion.div key={log.logId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <VisitorRow log={log} onExit={tab === 'active' ? handleExit : undefined} selected={selectedIds.has(log.logId)} onToggle={() => toggleId(log.logId)} />
+              <VisitorRow log={log} onExit={tab === 'active' ? handleExit : undefined} selected={selectedIds.has(log.logId)} onToggle={() => toggleId(log.logId)} onProfileUpdated={load} />
             </motion.div>
           ))}
         </AnimatePresence>

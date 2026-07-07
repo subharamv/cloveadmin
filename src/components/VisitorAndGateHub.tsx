@@ -28,14 +28,23 @@ import {
   Check,
   X,
   RefreshCw,
-  Smartphone
+  Smartphone,
+  Trash2,
+  CheckSquare,
+  Square,
+  Pencil
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 import { AdminVisitorVerification } from './AdminVisitorVerification';
 import { AdminPreRegisterModal } from './AdminPreRegisterModal';
-import { fetchExpectedVisitors, fetchVisitorLogs, VisitorLog as SheetVisitorLog } from '../security/api';
+import { AdminEditGuestModal } from './AdminEditGuestModal';
+import { PreRegisterChoiceModal } from './PreRegisterChoiceModal';
+import { PreRegisterQrModal } from './PreRegisterQrModal';
+import { fetchExpectedVisitors, fetchVisitorLogs, bulkDeleteVisitorLogs, VisitorLog as SheetVisitorLog } from '../security/api';
+import { DriveImage } from '../security/DriveImage';
+import { MediaViewerModal } from '../security/MediaViewerModal';
 import { db } from '../lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { 
@@ -105,10 +114,18 @@ export function VisitorAndGateHub({ searchTerm: initialSearchTerm = '' }: { sear
   const [toast, setToast] = useState<{ show: boolean; title: string; desc: string } | null>(null);
   const [activeTab, setActiveTab] = useState('analytics');
   const [sheetOnline, setSheetOnline] = useState<boolean | null>(null);
+  const [showPreRegisterChoice, setShowPreRegisterChoice] = useState(false);
   const [showPreRegisterModal, setShowPreRegisterModal] = useState(false);
+  const [showPreRegisterQrModal, setShowPreRegisterQrModal] = useState(false);
   const [expectedGuests, setExpectedGuests] = useState<SheetVisitorLog[]>([]);
   const [expectedError, setExpectedError] = useState<string | null>(null);
   const [sheetLogs, setSheetLogs] = useState<SheetVisitorLog[]>([]);
+
+  // Bulk selection state for the Pre-Registered Guests manifest
+  const [selectedGuestIds, setSelectedGuestIds] = useState<string[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [editingGuest, setEditingGuest] = useState<SheetVisitorLog | null>(null);
+  const [guestPhotoViewer, setGuestPhotoViewer] = useState<{ driveLink: string; title: string } | null>(null);
 
   const loadExpectedGuests = async () => {
     try {
@@ -410,6 +427,45 @@ export function VisitorAndGateHub({ searchTerm: initialSearchTerm = '' }: { sear
     setTimeout(() => setToast(null), 3000);
   };
 
+  const toggleGuestSelection = (logId: string) => {
+    setSelectedGuestIds(prev =>
+      prev.includes(logId) ? prev.filter(id => id !== logId) : [...prev, logId]
+    );
+  };
+
+  const toggleSelectAllGuests = () => {
+    if (selectedGuestIds.length === expectedGuests.length) {
+      setSelectedGuestIds([]);
+    } else {
+      setSelectedGuestIds(expectedGuests.map(g => g.logId));
+    }
+  };
+
+  const handleBulkDeleteGuests = async () => {
+    if (selectedGuestIds.length === 0) return;
+    setIsBulkDeleting(true);
+    try {
+      const result = await bulkDeleteVisitorLogs(selectedGuestIds);
+      setToast({
+        show: true,
+        title: 'Guests Removed',
+        desc: `${result.count ?? selectedGuestIds.length} pre-registered guest${(result.count ?? selectedGuestIds.length) === 1 ? '' : 's'} deleted from the manifest.`
+      });
+      setTimeout(() => setToast(null), 4000);
+      await loadExpectedGuests();
+      setSelectedGuestIds([]);
+    } catch (err: any) {
+      setToast({
+        show: true,
+        title: 'Bulk Delete Failed',
+        desc: err.message || 'Could not delete the selected guests.'
+      });
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
   const handleGateRegister = (e: React.FormEvent) => {
     e.preventDefault();
     if (!gateForm.vendor || !gateForm.items) return;
@@ -500,7 +556,7 @@ export function VisitorAndGateHub({ searchTerm: initialSearchTerm = '' }: { sear
           </button>
           <button
             type="button"
-            onClick={() => setShowPreRegisterModal(true)}
+            onClick={() => setShowPreRegisterChoice(true)}
             className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 hover:scale-[1.02] active:scale-95 border border-emerald-500/20 rounded-xl shadow-md shadow-emerald-500/10 cursor-pointer transition-all uppercase tracking-wider"
             title="Pre-register an expected guest for security check-in"
           >
@@ -541,39 +597,123 @@ export function VisitorAndGateHub({ searchTerm: initialSearchTerm = '' }: { sear
           </div>
           <Users size={14} className="text-[var(--text-secondary)] opacity-50 shrink-0" />
         </div>
+
+        {expectedGuests.length > 0 && (
+          <div className="px-6 py-2.5 border-b border-[var(--border-color)] bg-[var(--bg-color)]/30 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={toggleSelectAllGuests}
+              className="flex items-center gap-1.5 text-[10px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer transition-colors"
+            >
+              {selectedGuestIds.length === expectedGuests.length ? (
+                <CheckSquare size={14} className="text-blue-600" />
+              ) : (
+                <Square size={14} />
+              )}
+              {selectedGuestIds.length === expectedGuests.length ? 'Deselect All' : 'Select All'}
+              <span className="opacity-60 font-mono">({selectedGuestIds.length}/{expectedGuests.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkDeleteGuests}
+              disabled={selectedGuestIds.length === 0 || isBulkDeleting}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[9.5px] font-black uppercase tracking-wider text-white bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg shadow-sm cursor-pointer transition-all active:scale-95"
+            >
+              <Trash2 size={12} />
+              {isBulkDeleting ? 'Deleting…' : `Delete Selected (${selectedGuestIds.length})`}
+            </button>
+          </div>
+        )}
+
         {expectedError && <p className="px-6 pt-4 text-xs text-red-500">{expectedError}</p>}
         <div className="divide-y divide-[var(--border-color)]/40 max-h-[300px] overflow-y-auto custom-scrollbar">
           {expectedGuests.length === 0 && !expectedError && (
             <p className="p-6 text-center text-xs text-[var(--text-secondary)] opacity-50">No guests pre-registered yet.</p>
           )}
-          {expectedGuests.map(guest => (
-            <div key={guest.logId} className="p-3.5 hover:bg-[var(--bg-color)]/45 flex justify-between items-center text-xs group/item transition-all duration-300">
-              <div className="flex gap-3 items-center min-w-0">
-                <span className="p-2 bg-blue-500/10 border border-blue-500/20 text-blue-500 rounded-xl shrink-0"><UserCheck size={14} /></span>
-                <div className="truncate">
-                  <h5 className="font-extrabold text-[var(--text-primary)] truncate">{guest.name || guest.phone}</h5>
-                  <div className="flex items-center gap-1.5 mt-0.5 text-[9.5px] text-[var(--text-secondary)] opacity-60 font-medium">
-                    {guest.expectedTime && (
-                      <span className="font-mono flex items-center gap-1">
-                        <Clock size={10} className="inline" />{guest.expectedTime}
-                      </span>
+          {expectedGuests.map(guest => {
+            const isSelected = selectedGuestIds.includes(guest.logId);
+            return (
+              <div
+                key={guest.logId}
+                onClick={() => toggleGuestSelection(guest.logId)}
+                className={cn(
+                  "p-3.5 flex justify-between items-center text-xs group/item transition-all duration-300 cursor-pointer",
+                  isSelected ? "bg-blue-500/5" : "hover:bg-[var(--bg-color)]/45"
+                )}
+              >
+                <div className="flex gap-3 items-center min-w-0">
+                  <span className="shrink-0 text-blue-600">
+                    {isSelected ? <CheckSquare size={16} /> : <Square size={16} className="text-[var(--text-secondary)] opacity-50" />}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (guest.photoDriveLink) setGuestPhotoViewer({ driveLink: guest.photoDriveLink, title: `${guest.name || guest.phone} — Photo` });
+                    }}
+                    disabled={!guest.photoDriveLink}
+                    className="w-9 h-9 rounded-xl overflow-hidden shrink-0 border border-blue-500/20 bg-blue-500/10"
+                  >
+                    {guest.photoDriveLink ? (
+                      <DriveImage driveLink={guest.photoDriveLink} alt={guest.name || guest.phone} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="w-full h-full flex items-center justify-center text-blue-500"><UserCheck size={14} /></span>
                     )}
-                    {guest.host && (
-                      <>
-                        <span>•</span>
-                        <span className="truncate">{guest.host}</span>
-                      </>
-                    )}
+                  </button>
+                  <div className="truncate">
+                    <h5 className="font-extrabold text-[var(--text-primary)] truncate">{guest.name || guest.phone}</h5>
+                    <div className="flex items-center gap-1.5 mt-0.5 text-[9.5px] text-[var(--text-secondary)] opacity-60 font-medium">
+                      {guest.expectedTime && (
+                        <span className="font-mono flex items-center gap-1">
+                          <Clock size={10} className="inline" />{guest.expectedTime}
+                        </span>
+                      )}
+                      {guest.host && (
+                        <>
+                          <span>•</span>
+                          <span className="truncate">{guest.host}</span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingGuest(guest);
+                    }}
+                    className="p-1.5 rounded-lg bg-[var(--bg-color)]/70 hover:bg-blue-500/10 text-[var(--text-secondary)] hover:text-blue-600 border border-[var(--border-color)] transition-colors cursor-pointer"
+                    title="Edit guest details"
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <span className="px-2.5 py-1 rounded-lg text-[9px] font-black border uppercase tracking-wider shadow-sm bg-blue-500/10 border-blue-500/20 text-blue-500 animate-pulse">
+                    Expected
+                  </span>
+                </div>
               </div>
-              <span className="px-2.5 py-1 rounded-lg text-[9px] font-black border uppercase tracking-wider shadow-sm bg-blue-500/10 border-blue-500/20 text-blue-500 animate-pulse shrink-0">
-                Expected
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
+
+      {editingGuest && (
+        <AdminEditGuestModal
+          guest={editingGuest}
+          onClose={() => setEditingGuest(null)}
+          onUpdated={loadExpectedGuests}
+        />
+      )}
+
+      {guestPhotoViewer && (
+        <MediaViewerModal
+          driveLink={guestPhotoViewer.driveLink}
+          title={guestPhotoViewer.title}
+          onClose={() => setGuestPhotoViewer(null)}
+        />
+      )}
 
       {/* ================= SOC DASHBOARD TABS ================= */}
       <div className="bg-[var(--panel-bg)]/70 backdrop-blur-xl rounded-3xl border border-[var(--border-color)] shadow-sm overflow-hidden">
@@ -1079,11 +1219,29 @@ export function VisitorAndGateHub({ searchTerm: initialSearchTerm = '' }: { sear
         )}
       </AnimatePresence>
 
+      {showPreRegisterChoice && (
+        <PreRegisterChoiceModal
+          onClose={() => setShowPreRegisterChoice(false)}
+          onChooseManual={() => {
+            setShowPreRegisterChoice(false);
+            setShowPreRegisterModal(true);
+          }}
+          onChooseQr={() => {
+            setShowPreRegisterChoice(false);
+            setShowPreRegisterQrModal(true);
+          }}
+        />
+      )}
+
       {showPreRegisterModal && (
         <AdminPreRegisterModal
           onClose={() => setShowPreRegisterModal(false)}
           onCreated={loadExpectedGuests}
         />
+      )}
+
+      {showPreRegisterQrModal && (
+        <PreRegisterQrModal onClose={() => setShowPreRegisterQrModal(false)} />
       )}
 
       {/* ================= GLOBAL FLOATING COMPACT TOAST HUD ================= */}

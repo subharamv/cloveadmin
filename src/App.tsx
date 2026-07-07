@@ -23,8 +23,12 @@ import GlareHover from './components/GlareHover';
 import { BackendDataViewer } from './components/BackendDataViewer';
 import { FullVisitorLogsPage } from './components/FullVisitorLogsPage';
 import { SecurityPortal } from './security/SecurityPortal';
+import { GuestPreRegisterForm } from './components/GuestPreRegisterForm';
 import { BillPaymentsHub } from './bills/BillPaymentsHub';
 import { FullBillLogsPage } from './bills/FullBillLogsPage';
+
+const ADMIN_DASHBOARD_ROLES = ['Admin', 'Master Admin'];
+const SECURITY_PORTAL_REDIRECT_MESSAGE = "Security accounts don't have admin dashboard access. Please sign in at the Gate Security portal (/visitor) instead.";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -51,6 +55,17 @@ export default function App() {
     setLoginPassword('');
   };
 
+  // Guards against a Security-role session (persisted via the shared auth
+  // storage keys, e.g. from the /visitor portal) being reused on this admin
+  // dashboard route.
+  useEffect(() => {
+    if (sheetsUser && !ADMIN_DASHBOARD_ROLES.includes(sheetsUser.role)) {
+      sheetsLogout();
+      setSheetsUser(null);
+      setLoginError(SECURITY_PORTAL_REDIRECT_MESSAGE);
+    }
+  }, [sheetsUser]);
+
   const isAuthenticated = !!user || !!sheetsUser;
   const effectiveUser = user
     ? { username: user.email || user.uid, role: 'Google Account' }
@@ -69,6 +84,11 @@ export default function App() {
     setLoginError(null);
     try {
       const loggedInUser = await sheetsLogin(loginEmail, loginPassword);
+      if (!ADMIN_DASHBOARD_ROLES.includes(loggedInUser.role)) {
+        sheetsLogout();
+        setLoginError(SECURITY_PORTAL_REDIRECT_MESSAGE);
+        return;
+      }
       setSheetsUser(loggedInUser);
       setLoginEmail('');
       setLoginPassword('');
@@ -105,10 +125,14 @@ export default function App() {
     if (token && userParam) {
       try {
         const loggedInUser = JSON.parse(userParam) as AppUser;
-        // The callback hands back a raw JWT; every other call site expects
-        // the "Bearer " prefix already baked into the stored token string.
-        storeSession(`Bearer ${token}`, loggedInUser);
-        setSheetsUser(loggedInUser);
+        if (!ADMIN_DASHBOARD_ROLES.includes(loggedInUser.role)) {
+          setLoginError(SECURITY_PORTAL_REDIRECT_MESSAGE);
+        } else {
+          // The callback hands back a raw JWT; every other call site expects
+          // the "Bearer " prefix already baked into the stored token string.
+          storeSession(`Bearer ${token}`, loggedInUser);
+          setSheetsUser(loggedInUser);
+        }
       } catch {
         setLoginError('Could not complete Google sign-in. Please try again.');
       }
@@ -129,10 +153,17 @@ export default function App() {
     return window.location.pathname === '/visitor' || window.location.hash === '#/visitor';
   });
 
+  // Public, unauthenticated self-service pre-registration page shared with
+  // guests via QR/link — no security or admin login involved.
+  const [isGuestPreRegisterRoute, setIsGuestPreRegisterRoute] = useState(() => {
+    return window.location.pathname === '/guest-preregister' || window.location.hash === '#/guest-preregister';
+  });
+
   useEffect(() => {
     const handleLocationChange = () => {
       setIsBackendRoute(window.location.pathname === '/system-backend' || window.location.hash === '#/system-backend');
       setIsVisitorRoute(window.location.pathname === '/visitor' || window.location.hash === '#/visitor');
+      setIsGuestPreRegisterRoute(window.location.pathname === '/guest-preregister' || window.location.hash === '#/guest-preregister');
     };
     window.addEventListener('popstate', handleLocationChange);
     window.addEventListener('hashchange', handleLocationChange);
@@ -144,6 +175,10 @@ export default function App() {
 
   if (isBackendRoute) {
     return <BackendDataViewer />;
+  }
+
+  if (isGuestPreRegisterRoute) {
+    return <GuestPreRegisterForm />;
   }
 
   if (isVisitorRoute) {
@@ -218,7 +253,7 @@ export default function App() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0, scale: 1.05, filter: 'blur(20px)' }}
           transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
-          className="min-h-screen bg-[#0A0A0B] flex items-center justify-center p-4 relative overflow-hidden bg-grid"
+          className="dark min-h-screen bg-[#0A0A0B] flex items-center justify-center p-4 relative overflow-hidden bg-grid"
         >
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.05)_0%,transparent_70%)] pointer-events-none" />
           <div className="scanline" />

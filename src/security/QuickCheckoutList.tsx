@@ -3,16 +3,19 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Phone, LogOut, Loader2, Users, Timer } from 'lucide-react';
 import { fetchActiveVisitors, markVisitorExit, VisitorLog } from './api';
 import { DriveImage } from './DriveImage';
+import { MediaViewerModal } from './MediaViewerModal';
 import { elapsedSince } from './timeUtils';
 
-export function QuickCheckoutList() {
+export function QuickCheckoutList({ refreshSignal }: { refreshSignal?: number } = {}) {
   const [entries, setEntries] = useState<VisitorLog[]>([]);
   const [search, setSearch] = useState('');
   const [exitingId, setExitingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(new Date());
+  const [viewer, setViewer] = useState<{ driveLink: string; title: string } | null>(null);
 
   const load = useCallback(async () => {
+    setError(null);
     try {
       const data = await fetchActiveVisitors();
       setEntries(data);
@@ -26,6 +29,12 @@ export function QuickCheckoutList() {
     const interval = setInterval(load, 20000);
     return () => clearInterval(interval);
   }, [load]);
+
+  // A new/updated visitor entry elsewhere on the page (EntryForm) bumps this
+  // to force an immediate reload instead of waiting up to 20s for the poll.
+  useEffect(() => {
+    if (refreshSignal !== undefined) load();
+  }, [refreshSignal, load]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 30000);
@@ -79,9 +88,20 @@ export function QuickCheckoutList() {
               exit={{ opacity: 0, x: -20 }}
               className="bg-[var(--panel-bg)] border border-[var(--border-color)] rounded-2xl p-3 flex items-center gap-3 shadow-sm"
             >
-              <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-[var(--border-color)]">
+              <button
+                type="button"
+                onClick={() => entry.photoDriveLink && setViewer({ driveLink: entry.photoDriveLink, title: `${entry.name} — Photo` })}
+                disabled={!entry.photoDriveLink}
+                className={
+                  'w-10 h-10 rounded-lg overflow-hidden shrink-0 border transition-colors ' +
+                  (entry.photoDriveLink
+                    ? 'border-transparent hover:border-blue-400 cursor-pointer'
+                    : 'bg-[var(--bg-color)] border-[var(--border-color)] pointer-events-none')
+                }
+                title={entry.photoDriveLink ? 'View entry photo' : 'No photo on file'}
+              >
                 <DriveImage driveLink={entry.photoDriveLink} alt={entry.name} className="w-full h-full object-cover" />
-              </div>
+              </button>
 
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-sm text-[var(--text-primary)] truncate">{entry.name}</h3>
@@ -110,6 +130,10 @@ export function QuickCheckoutList() {
           <p className="text-center text-xs text-[var(--text-secondary)] opacity-50 py-6">No matching on-site visitors.</p>
         )}
       </div>
+
+      {viewer && (
+        <MediaViewerModal driveLink={viewer.driveLink} title={viewer.title} onClose={() => setViewer(null)} />
+      )}
     </div>
   );
 }

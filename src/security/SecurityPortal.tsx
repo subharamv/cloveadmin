@@ -1,11 +1,12 @@
 import { useState, FormEvent, useEffect } from 'react';
-import { ShieldCheck, UserPlus, Users, History, LogOut, Loader2, Activity, Sun, Moon, Eye, EyeOff, KeyRound, Lock } from 'lucide-react';
+import { ShieldCheck, UserPlus, Users, History, LogOut, Loader2, Activity, Sun, Moon, Eye, EyeOff, KeyRound, Lock, QrCode } from 'lucide-react';
 import { login, logout, getStoredSession, AppUser } from '../lib/auth';
 import { fetchActiveVisitors, fetchVisitorLogs } from './api';
 import { EntryForm } from './EntryForm';
 import { ActiveEntries } from './ActiveEntries';
 import { HistoryLogs } from './HistoryLogs';
 import { QuickCheckoutList } from './QuickCheckoutList';
+import { QrScanModal } from './QrScanModal';
 import { PinInput } from '../components/PinInput';
 
 type View = 'entry' | 'active' | 'history';
@@ -178,6 +179,23 @@ export function SecurityPortal() {
   const [activeCount, setActiveCount] = useState(0);
   const [todayVisits, setTodayVisits] = useState(0);
   const [todayVisitors, setTodayVisitors] = useState(0);
+  // Bumped whenever a visitor entry is logged, so sibling panels (Quick
+  // Checkout, the counters below) refresh immediately instead of waiting on
+  // their own polling interval or a tab switch.
+  const [refreshSignal, setRefreshSignal] = useState(0);
+  const bumpRefresh = () => setRefreshSignal((n) => n + 1);
+  const [showScanModal, setShowScanModal] = useState(false);
+  const [scannedPhone, setScannedPhone] = useState('');
+  const [scanSignal, setScanSignal] = useState(0);
+
+  const handleScan = (decodedText: string) => {
+    const digits = decodedText.replace(/[^0-9]/g, '').slice(0, 10);
+    setShowScanModal(false);
+    if (!digits) return;
+    setView('entry');
+    setScannedPhone(digits);
+    setScanSignal((n) => n + 1);
+  };
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const stored = localStorage.getItem('securityDarkMode');
     if (stored !== null) return stored === 'true';
@@ -216,7 +234,7 @@ export function SecurityPortal() {
     loadCount();
     const interval = setInterval(loadCount, 20000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, refreshSignal]);
 
   useEffect(() => {
     if (!user || !ALLOWED_ROLES.includes(user.role)) return;
@@ -233,7 +251,7 @@ export function SecurityPortal() {
     loadTodayStats();
     const interval = setInterval(loadTodayStats, 30000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, refreshSignal]);
 
   if (!user || !ALLOWED_ROLES.includes(user.role)) {
     return <SecurityLoginScreen onLoggedIn={setUser} />;
@@ -346,8 +364,8 @@ export function SecurityPortal() {
             </div>
           </div>
         )}
-        {view === 'entry' && <EntryForm />}
-        {view === 'entry' && <QuickCheckoutList />}
+        {view === 'entry' && <EntryForm onEntryLogged={bumpRefresh} prefillPhone={scannedPhone} prefillSignal={scanSignal} />}
+        {view === 'entry' && <QuickCheckoutList refreshSignal={refreshSignal} />}
         {view === 'active' && <ActiveEntries />}
         {view === 'history' && <HistoryLogs />}
       </div>
@@ -374,7 +392,23 @@ export function SecurityPortal() {
             <span className="text-[10px] font-bold uppercase tracking-wide">{tab.label}</span>
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => setShowScanModal(true)}
+          className="flex-1 relative flex flex-col items-center gap-1 py-3 text-[var(--text-secondary)] transition-colors"
+        >
+          <QrCode className="w-5 h-5" />
+          <span className="text-[10px] font-bold uppercase tracking-wide">Scan</span>
+        </button>
       </div>
+
+      {showScanModal && (
+        <QrScanModal
+          title="Scan Visitor QR to Check In"
+          onScan={handleScan}
+          onClose={() => setShowScanModal(false)}
+        />
+      )}
     </div>
   );
 }

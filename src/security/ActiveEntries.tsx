@@ -160,7 +160,11 @@ export function ActiveEntries() {
                         <Timer className="w-3 h-3" /> {elapsedSince(entry.entryTime, now)} inside
                       </span>
                     </div>
-                    <p className="text-[11px] sm:text-xs text-[var(--text-secondary)] mt-0.5 truncate">{entry.purpose}</p>
+                    <p className="text-[11px] sm:text-xs text-[var(--text-secondary)] mt-0.5 truncate">
+                      {entry.purpose}
+                      {entry.occupation && ` · ${entry.occupation}`}
+                      {entry.numberOfPersons > 1 && ` · ${entry.numberOfPersons} pax`}
+                    </p>
                     {entry.documentDriveLink && (
                       <button
                         type="button"

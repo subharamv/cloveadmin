@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Phone, Search } from 'lucide-react';
+import { Phone, Search, QrCode } from 'lucide-react';
 import { searchVisitors, VisitorMatch } from './api';
+import { QrScanModal } from './QrScanModal';
 
 interface PhoneSearchFieldProps {
   value: string;
@@ -12,8 +13,15 @@ interface PhoneSearchFieldProps {
 export function PhoneSearchField({ value, matchedName, onChange, disabled }: PhoneSearchFieldProps) {
   const [matches, setMatches] = useState<VisitorMatch[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleScan = (decodedText: string) => {
+    const digits = decodedText.replace(/[^0-9]/g, '').slice(0, 10);
+    if (digits) onChange(digits, null);
+    setShowScanner(false);
+  };
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -63,10 +71,23 @@ export function PhoneSearchField({ value, matchedName, onChange, disabled }: Pho
           }}
           onFocus={() => setShowDropdown(matches.length > 0)}
           placeholder="Enter 10-digit mobile number"
-          className="w-full pl-11 pr-4 py-3.5 text-base bg-[var(--panel-bg)] border border-[var(--border-color)] rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all disabled:opacity-50"
+          className="w-full pl-11 pr-11 py-3.5 text-base bg-[var(--panel-bg)] border border-[var(--border-color)] rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all disabled:opacity-50"
           maxLength={10}
         />
+        <button
+          type="button"
+          onClick={() => setShowScanner(true)}
+          disabled={disabled}
+          title="Scan visitor QR to fill in their number"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] hover:text-blue-500 transition-colors disabled:opacity-40"
+        >
+          <QrCode className="w-4 h-4" />
+        </button>
       </div>
+
+      {showScanner && (
+        <QrScanModal onScan={handleScan} onClose={() => setShowScanner(false)} />
+      )}
 
       {matchedName && (
         <p className="mt-1.5 text-xs text-[var(--text-secondary)] pl-1">
